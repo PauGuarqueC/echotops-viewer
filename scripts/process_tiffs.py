@@ -41,6 +41,20 @@ def get_colormap(name):
         return cm.get_cmap(name)                    # matplotlib < 3.7
 
 
+def downsample_max(data: np.ndarray, target_dim: int = 100) -> np.ndarray:
+    """Redueix la graella agafant el MÀXIM de cada bloc de píxels (no un
+    píxel solt cada N), perquè cap cel·la representi fidelment tota la seva
+    àrea i no hi hagi buits ni pics aïllats mal representats."""
+    step = max(1, max(data.shape) // target_dim)
+    h, w = data.shape
+    pad_h = (-h) % step
+    pad_w = (-w) % step
+    padded = np.pad(data, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
+    hh, ww = padded.shape
+    blocks = padded.reshape(hh // step, step, ww // step, step)
+    return blocks.max(axis=(1, 3))
+
+
 def tiff_to_png(tiff_path: Path, out_png: Path, out_json: Path):
     with rasterio.open(tiff_path) as src:
         dst_crs = "EPSG:4326"
@@ -73,10 +87,9 @@ def tiff_to_png(tiff_path: Path, out_png: Path, out_json: Path):
 
     # Graella de valors submostrejada (lleugera) perquè el frontend pugui
     # mostrar el valor numèric sota el cursor sense haver de descarregar
-    # el TIFF sencer. La resolució completa és massa pesada per servir-la
-    # al navegador; ~60 columnes és de sobres per a un hover aproximat.
-    step = max(1, max(data.shape) // 60)
-    grid = data[::step, ::step]
+    # el TIFF sencer. Fem servir el màxim per bloc (no un píxel solt cada
+    # N) perquè cada cel·la representi fidelment tota la seva àrea.
+    grid = downsample_max(data)
     grid_values = [
         [round(float(v), 2) if v > 0 else None for v in row]
         for row in grid

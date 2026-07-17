@@ -1,15 +1,19 @@
 """
-Afegeix retroactivament la graella de valors (per al hover del mapa) als
-frames que ja es van processar abans d'aquesta funcionalitat existir.
+Recalcula la graella de valors (per al hover del mapa) de TOTS els frames,
+amb el mètode de màxim per bloc (més fiable que el mostreig per salts).
+
+Reprocessa també els frames que ja tenien una graella antiga (generada amb
+el mètode anterior, que podia donar falsos positius/negatius al hover).
 
 No regenera els PNG (ja existeixen i són correctes) — només recalcula la
 reprojecció per obtenir els valors numèrics i actualitza el .json de cada
-frame afegint-hi la clau "grid".
+frame.
 
 Execució: python3 scripts/backfill_grid.py
 """
 
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -20,7 +24,6 @@ REPO_ROOT = Path(__file__).parent.parent
 RAW_DIR = REPO_ROOT / "data" / "raw"
 PNG_DIR = REPO_ROOT / "data" / "png"
 
-import re
 FILENAME_RE = re.compile(r"_TOP_(\d{8})_(\d{4})_TOPS130")
 
 
@@ -30,6 +33,20 @@ def parse_timestamp(filename: str):
         return None
     date_str, hour_str = m.groups()
     return f"{date_str}_{hour_str}"
+
+
+def downsample_max(data: np.ndarray, target_dim: int = 100) -> np.ndarray:
+    """Màxim per bloc de píxels, perquè cada cel·la de la graella
+    representi fidelment tota la seva àrea (sense buits ni pics aïllats
+    mal representats, com passava amb el mostreig per salts anterior)."""
+    step = max(1, max(data.shape) // target_dim)
+    h, w = data.shape
+    pad_h = (-h) % step
+    pad_w = (-w) % step
+    padded = np.pad(data, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
+    hh, ww = padded.shape
+    blocks = padded.reshape(hh // step, step, ww // step, step)
+    return blocks.max(axis=(1, 3))
 
 
 def calcula_graella(tiff_path: Path):
@@ -51,8 +68,7 @@ def calcula_graella(tiff_path: Path):
             dst_nodata=0,
         )
 
-    step = max(1, max(data.shape) // 60)
-    grid = data[::step, ::step]
+    grid = downsample_max(data)
     values = [
         [round(float(v), 2) if v > 0 else None for v in row]
         for row in grid
@@ -62,7 +78,6 @@ def calcula_graella(tiff_path: Path):
 
 def main():
     actualitzats = 0
-    ja_tenien = 0
     errors = []
 
     for tiff_path in sorted(RAW_DIR.glob("*.tif")):
@@ -74,9 +89,6 @@ def main():
             continue  # frame sense json (no hauria de passar, es processa junts)
 
         meta = json.loads(json_path.read_text())
-        if "grid" in meta:
-            ja_tenien += 1
-            continue
 
         try:
             meta["grid"] = calcula_graella(tiff_path)
@@ -89,10 +101,10 @@ def main():
             print(f"ERROR amb {tiff_path.name}: {e}")
 
     print(f"\nActualitzats: {actualitzats}")
-    print(f"Ja tenien graella (saltats): {ja_tenien}")
     if errors:
         print(f"Errors ({len(errors)}): {errors}")
 
 
 if __name__ == "__main__":
     main()
+
