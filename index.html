@@ -862,24 +862,6 @@ function initMap(){
     });
   }
 
-  // Punts de referència per orientar-se sense necessitat d'un mapa base extern
-  // (els mosaics de mapes de fons no es poden "capturar" de manera fiable
-  // des del navegador). Coordenades aproximades dels centres urbans.
-  const CITY_POINTS = [
-    { name: 'Barcelona', lat: 41.3851, lon: 2.1734 },
-    { name: 'Girona', lat: 41.9794, lon: 2.8214 },
-    { name: 'Lleida', lat: 41.6176, lon: 0.6200 },
-    { name: 'Tarragona', lat: 41.1189, lon: 1.2445 },
-    { name: 'Reus', lat: 41.1550, lon: 1.1075 },
-    { name: 'Manresa', lat: 41.7287, lon: 1.8308 },
-    { name: 'Vic', lat: 41.9301, lon: 2.2545 },
-    { name: 'Figueres', lat: 42.2662, lon: 2.9622 },
-    { name: 'Tortosa', lat: 40.8126, lon: 0.5211 },
-    { name: 'Puigcerdà', lat: 42.4331, lon: 1.9284 },
-    { name: 'Berga', lat: 42.1010, lon: 1.8459 },
-    { name: 'Igualada', lat: 41.5791, lon: 1.6174 },
-  ];
-
   // GeoJSON real de les comarques de Catalunya (carregat un sol cop i
   // reutilitzat per a tots els frames).
   let comarquesGeo = null;
@@ -939,14 +921,24 @@ function initMap(){
         carregaComarques(),
       ]);
       const areaW = EXPORT_W - 32, areaH = EXPORT_H - 50 - 70 - 16;
-      const scale = Math.min(areaW / img.width, areaH / img.height);
-      const w = img.width * scale, h = img.height * scale;
-      const x = (EXPORT_W - w) / 2, y = 50 + (areaH - h) / 2 + 8;
       ctx.fillStyle = '#050a0d';
       ctx.fillRect(16, 58, areaW, areaH);
 
+      let w, h, x, y;
       if (meta && meta.bounds){
+        // Fem servir la proporció REAL en graus (no la proporció de píxels
+        // de la imatge) perquè la imatge i les comarques quedin sempre
+        // perfectament alineades, encaixant-ho dins l'espai disponible.
         const [[south, west], [north, east]] = meta.bounds;
+        const geoAspect = (east - west) / (north - south);
+        if (areaW / areaH > geoAspect){
+          h = areaH; w = areaH * geoAspect;
+        } else {
+          w = areaW; h = areaW / geoAspect;
+        }
+        x = (EXPORT_W - w) / 2;
+        y = 50 + (areaH - h) / 2 + 8;
+
         const toPx = (lat, lon) => [
           x + ((lon - west) / (east - west)) * w,
           y + ((north - lat) / (north - south)) * h,
@@ -956,24 +948,10 @@ function initMap(){
         if (geo) dibuixaComarques(ctx, geo, toPx);
 
         ctx.drawImage(img, x, y, w, h);
-
-        // Punts de referència (ciutats)
-        ctx.font = '11px Roboto, sans-serif';
-        ctx.textBaseline = 'middle';
-        CITY_POINTS.forEach(c => {
-          if (c.lat < south || c.lat > north || c.lon < west || c.lon > east) return;
-          const [px, py] = toPx(c.lat, c.lon);
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(px, py, 2.5, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-          ctx.strokeText(c.name, px + 6, py);
-          ctx.fillStyle = '#ffffff';
-          ctx.fillText(c.name, px + 6, py);
-        });
       } else {
+        const scale = Math.min(areaW / img.width, areaH / img.height);
+        w = img.width * scale; h = img.height * scale;
+        x = (EXPORT_W - w) / 2; y = 50 + (areaH - h) / 2 + 8;
         ctx.drawImage(img, x, y, w, h);
       }
     }catch(e){
