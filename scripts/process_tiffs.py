@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import rasterio
 import matplotlib
+import matplotlib.colors as mcolors
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 from matplotlib import cm
 from PIL import Image
@@ -21,9 +22,16 @@ PNG_DIR = REPO_ROOT / "data" / "png"
 
 FILENAME_RE = re.compile(r"_TOP_(\d{8})_(\d{4})_TOPS130")
 
-# AJUSTAR quan es vegi el rang real de valors (data_min/data_max al JSON generat)
-VMIN, VMAX = 0.0, 15.0
-COLORMAP = "turbo"
+# Escala discreta d'alçada d'echo top (km), inspirada en la paleta d'AEMET.
+# Colors aproximats — si teniu els codis hex exactes de la guia d'AEMET,
+# ajusteu AEMET_COLORS.
+AEMET_BOUNDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 999]
+AEMET_COLORS = [
+    "#0000B3", "#0033FF", "#0080FF", "#00CCFF", "#00FFFF",
+    "#4C7300", "#80B300", "#00CC00", "#FFFF00", "#FFA500",
+    "#FF7F00", "#FF0000", "#FF00FF", "#800080",
+]
+VMIN, VMAX = 0.0, 20.0  # es manté per referència, la normalització real la fa BoundaryNorm
 
 
 def parse_timestamp(filename: str):
@@ -34,11 +42,10 @@ def parse_timestamp(filename: str):
     return f"{date_str}_{hour_str}"
 
 
-def get_colormap(name):
-    try:
-        return matplotlib.colormaps[name]          # matplotlib >= 3.7
-    except AttributeError:
-        return cm.get_cmap(name)                    # matplotlib < 3.7
+def get_aemet_cmap_norm():
+    cmap = mcolors.ListedColormap(AEMET_COLORS)
+    norm = mcolors.BoundaryNorm(AEMET_BOUNDS, cmap.N)
+    return cmap, norm
 
 
 def downsample_max(data: np.ndarray, target_dim: int = 100) -> np.ndarray:
@@ -78,9 +85,8 @@ def tiff_to_png(tiff_path: Path, out_png: Path, out_json: Path):
         east = west + transform.a * width
         south = north + transform.e * height
 
-    norm = np.clip((data - VMIN) / (VMAX - VMIN), 0, 1)
-    cmap = get_colormap(COLORMAP)
-    rgba = (cmap(norm) * 255).astype(np.uint8)
+    cmap, bnorm = get_aemet_cmap_norm()
+    rgba = (cmap(bnorm(data)) * 255).astype(np.uint8)
     rgba[..., 3] = np.where(data <= 0, 0, 200)
 
     Image.fromarray(rgba, mode="RGBA").save(out_png)
