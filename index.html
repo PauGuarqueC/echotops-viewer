@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Echo Tops · ONOFRE / GRAF</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔥</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -21,12 +22,6 @@
   }
   * { box-sizing: border-box; }
   html, body { margin:0; padding:0; height:100%; background:var(--bg); color:#eef0f1; font-family:var(--font-ui); overflow:hidden; }
-
-  /* Franja senyera, discret toc institucional a dalt de tot */
-  body::before{
-    content:''; position:fixed; top:0; left:0; right:0; height:4px; z-index:2100;
-    background: repeating-linear-gradient(90deg, var(--red) 0 40px, #ffcc00 40px 48px, var(--red) 48px 88px);
-  }
 
   /* ---- Pantalla de contrasenya ---- */
   #gate{
@@ -175,6 +170,11 @@
 //   echo -n "la_teva_contrasenya" | sha256sum
 const PASSWORD_HASH = "2690c509bd0fb7fad0cf5266990c405155ebaed153af31d29f2ebfe45ad70a15";
 
+// Declarat aquí dalt (i no just abans de la funció initMap) perquè les
+// crides automàtiques a initMap() de més avall puguin accedir-hi sense
+// error de "cannot access before initialization".
+let mapInitialized = false;
+
 async function sha256(text){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
@@ -212,7 +212,6 @@ document.getElementById('gate-form').addEventListener('submit', async (e) => {
 })();
 
 // ---- Visor (només s'inicialitza un cop desbloquejat) ----
-let mapInitialized = false;
 function initMap(){
   if (mapInitialized) return;
   mapInitialized = true;
