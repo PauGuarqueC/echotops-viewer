@@ -524,11 +524,25 @@ function initMap(){
     mode = 'live';
     liveBtn.style.display = 'none';
     if (!manifest.timestamps.length) { visibleTimestamps = []; return; }
+
+    // Si l'usuari ja estava mirant l'últim frame, el seguim mantenint al dia.
+    // Si estava mirant un moment anterior, no el movem de sobte.
+    const eraAlDarrer = visibleTimestamps.length === 0
+      || parseInt(scrubber.value, 10) === visibleTimestamps.length - 1;
+    const tsActual = visibleTimestamps[parseInt(scrubber.value, 10)];
+
     const darrer = tsToDate(manifest.timestamps[manifest.timestamps.length - 1]);
     const cutoff = new Date(darrer.getTime() - HORES_EN_VIU * 3600 * 1000);
     visibleTimestamps = manifest.timestamps.filter(ts => tsToDate(ts) >= cutoff);
     dateSelect.value = manifest.timestamps[manifest.timestamps.length - 1].slice(0, 8);
-    showFrame(visibleTimestamps.length - 1);
+
+    if (eraAlDarrer){
+      showFrame(visibleTimestamps.length - 1);
+    } else {
+      // Mantenim la posició on era, ajustant l'índex si la finestra s'ha desplaçat
+      const novaIdx = visibleTimestamps.indexOf(tsActual);
+      showFrame(novaIdx >= 0 ? novaIdx : visibleTimestamps.length - 1);
+    }
     statusText.textContent = `En viu · últimes ${HORES_EN_VIU}h · ${visibleTimestamps.length} frames`;
   }
 
@@ -589,7 +603,14 @@ function initMap(){
   }
 
   loadManifest();
-  setInterval(loadManifest, 5 * 60 * 1000); // GitHub Actions actualitza cada ~10 min
+  setInterval(loadManifest, 90 * 1000); // comprova cada 90s (les dades arriben cada ~6 min)
+
+  // Els navegadors "congelen" els temporitzadors quan la pestanya és en
+  // segon pla (minimitzada, mòbil bloquejat...). En tornar-hi, refresquem
+  // de seguida en comptes d'esperar el proper interval.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') loadManifest();
+  });
 
   // ---- Anàlisi de zona ----
   const analysisBtn = document.getElementById('analysis-btn');
