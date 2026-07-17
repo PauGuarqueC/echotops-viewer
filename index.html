@@ -127,6 +127,44 @@
   #analysis-btn:hover{ background:rgba(255,255,255,0.15); }
   #analysis-btn.active{ background:var(--red); border-color:var(--red); }
 
+  #export-btn{
+    font-family:var(--font-ui); font-size:11px; color:#fff; background:transparent;
+    border:1px solid rgba(255,255,255,0.4); border-radius:4px; padding:6px 10px; cursor:pointer; font-weight:500;
+  }
+  #export-btn:hover{ background:rgba(255,255,255,0.15); }
+  #export-btn.active{ background:var(--red); border-color:var(--red); }
+
+  #export-overlay{
+    display:none; position:absolute; top:68px; left:20px; z-index:1400;
+    width:min(340px, calc(100vw - 40px));
+  }
+  #export-overlay.visible{ display:block; }
+  #export-panel{
+    background:var(--panel); border-radius:8px; padding:18px; max-height:calc(100vh - 100px); overflow-y:auto;
+    box-shadow:0 8px 24px rgba(0,0,0,0.35); border:1px solid var(--panel-border);
+    font-family:var(--font-ui); color:var(--text);
+  }
+  #export-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; }
+  #export-header h2{ font-size:15px; font-weight:500; margin:0; }
+  #export-close{ background:transparent; border:none; font-size:18px; cursor:pointer; color:var(--text-dim); flex-shrink:0; line-height:1; }
+  #export-close:hover{ color:var(--red); }
+  .export-section{ margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--panel-border); }
+  .export-section:last-child{ border-bottom:none; margin-bottom:0; padding-bottom:0; }
+  .export-section h3{ font-size:12px; font-weight:500; margin:0 0 8px 0; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.04em; }
+  .export-section p{ font-size:12px; color:var(--text-dim); margin:0 0 10px 0; }
+  #export-dates{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+  #export-dates label{ font-size:12px; color:var(--text-dim); flex:1; min-width:130px; }
+  #export-dates input{
+    font-family:var(--font-ui); font-size:12px; padding:6px 8px; border:1px solid var(--panel-border);
+    border-radius:4px; margin-top:4px; width:100%;
+  }
+  #photo-btn, #gif-btn{
+    font-family:var(--font-ui); font-size:13px; color:#fff; background:var(--red);
+    border:none; border-radius:4px; padding:10px 16px; cursor:pointer; font-weight:500; width:100%;
+  }
+  #photo-btn:hover, #gif-btn:hover{ background:var(--red-dark); }
+  #export-progress{ margin-top:10px; font-family:var(--font-mono); font-size:11px; color:var(--text-dim); }
+
   #analysis-overlay{
     display:none; position:absolute; top:68px; left:20px; z-index:1400;
     width:min(340px, calc(100vw - 40px));
@@ -217,6 +255,7 @@
       <span class="dot" id="status-dot"></span>
       <span id="status-text">carregant…</span>
       <button id="analysis-btn" style="margin-left:10px;">📊 ALÇADA DE LA COLUMNA</button>
+      <button id="export-btn" style="margin-left:6px;">🎬 EXPORTA</button>
     </div>
   </div>
   <div id="legend">
@@ -293,6 +332,32 @@
     </div>
   </div>
 
+  <div id="export-overlay">
+    <div id="export-panel">
+      <div id="export-header">
+        <h2>Exporta per compartir</h2>
+        <button id="export-close">✕</button>
+      </div>
+
+      <div class="export-section">
+        <h3>Foto</h3>
+        <p>Captura l'instant que estàs mirant ara mateix a la timeline principal.</p>
+        <button id="photo-btn">📷 Descarrega foto</button>
+      </div>
+
+      <div class="export-section">
+        <h3>GIF animat</h3>
+        <p>Genera una animació d'un rang d'hores (màxim 200 frames, ~20h a 6 min/frame).</p>
+        <div id="export-dates">
+          <label>Des de (UTC): <input type="datetime-local" id="gif-dt-start" /></label>
+          <label>Fins a (UTC): <input type="datetime-local" id="gif-dt-end" /></label>
+        </div>
+        <button id="gif-btn">🎞 Genera GIF</button>
+        <div id="export-progress"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="result-overlay">
     <div id="result-panel">
       <div id="result-header">
@@ -308,6 +373,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
 <script>
 // ---- Pantalla de contrasenya (protecció bàsica, no és seguretat forta) ----
 // Hash SHA-256 de la contrasenya triada. Genera'l amb:
@@ -393,10 +459,13 @@ function initMap(){
     return new Date(Date.UTC(y, mo, d, h, mi));
   }
 
+  let currentTs = null;
+
   function showFrame(index){
     if (!visibleTimestamps.length) return;
     index = Math.max(0, Math.min(index, visibleTimestamps.length - 1));
     const ts = visibleTimestamps[index];
+    currentTs = ts;
     const { date, time } = fmtTs(ts);
     tsDate.textContent = date;
     tsTime.textContent = time;
@@ -752,6 +821,183 @@ function initMap(){
     a.href = url;
     a.download = `echotops_grafic_${lastCsvData[0].ts}_${lastCsvData[lastCsvData.length-1].ts}.png`;
     a.click();
+  });
+
+  // ---- Exportació: foto i GIF ----
+  const exportBtn = document.getElementById('export-btn');
+  const exportOverlay = document.getElementById('export-overlay');
+  const exportClose = document.getElementById('export-close');
+  const photoBtn = document.getElementById('photo-btn');
+  const gifBtn = document.getElementById('gif-btn');
+  const gifDtStart = document.getElementById('gif-dt-start');
+  const gifDtEnd = document.getElementById('gif-dt-end');
+  const exportProgress = document.getElementById('export-progress');
+
+  const EXPORT_COLORS = ["#0000B3","#0033FF","#0080FF","#00CCFF","#00FFFF","#4C7300","#80B300","#00CC00","#FFFF00","#FFA500","#FF7F00","#FF0000","#FF00FF","#800080"];
+  const EXPORT_LABELS = ["1","2","3","4","5","6","7","8","10","12","14","16","20"];
+  const EXPORT_W = 900, EXPORT_H = 700;
+
+  exportBtn.addEventListener('click', () => {
+    exportOverlay.classList.toggle('visible');
+    exportBtn.classList.toggle('active');
+    if (manifest.timestamps.length && !gifDtStart.value){
+      const darrer = tsToDate(manifest.timestamps[manifest.timestamps.length - 1]);
+      const inici = new Date(darrer.getTime() - 2 * 3600 * 1000);
+      gifDtEnd.value = darrer.toISOString().slice(0, 16);
+      gifDtStart.value = inici.toISOString().slice(0, 16);
+    }
+  });
+  exportClose.addEventListener('click', () => {
+    exportOverlay.classList.remove('visible');
+    exportBtn.classList.remove('active');
+  });
+
+  function carregaImatge(url){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  async function dibuixaFrame(ctx, ts){
+    ctx.fillStyle = '#0a1216';
+    ctx.fillRect(0, 0, EXPORT_W, EXPORT_H);
+
+    // Capçalera
+    ctx.fillStyle = '#2b2b2b';
+    ctx.fillRect(0, 0, EXPORT_W, 50);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px Roboto, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Echo Tops · Bombers GRAF', 16, 25);
+    const { date, time } = fmtTs(ts);
+    ctx.fillStyle = '#C8102E';
+    ctx.font = 'bold 20px "Roboto Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${date}  ${time} UTC`, EXPORT_W - 16, 25);
+    ctx.textAlign = 'left';
+
+    // Imatge del radar, centrada a l'espai disponible
+    try{
+      const img = await carregaImatge(`data/png/${ts}.png`);
+      const areaW = EXPORT_W - 32, areaH = EXPORT_H - 50 - 70 - 16;
+      const scale = Math.min(areaW / img.width, areaH / img.height);
+      const w = img.width * scale, h = img.height * scale;
+      const x = (EXPORT_W - w) / 2, y = 50 + (areaH - h) / 2 + 8;
+      ctx.fillStyle = '#050a0d';
+      ctx.fillRect(16, 58, areaW, areaH);
+      ctx.drawImage(img, x, y, w, h);
+    }catch(e){
+      ctx.fillStyle = '#888';
+      ctx.font = '14px Roboto, sans-serif';
+      ctx.fillText('(imatge no disponible)', EXPORT_W/2 - 80, EXPORT_H/2);
+    }
+
+    // Llegenda al peu
+    const legY = EXPORT_H - 62;
+    ctx.font = '11px Roboto, sans-serif';
+    ctx.fillStyle = '#cccccc';
+    ctx.fillText('ALÇADA ECHO TOP (KM)', 16, legY);
+    const bandW = (EXPORT_W - 32) / EXPORT_COLORS.length;
+    EXPORT_COLORS.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(16 + i * bandW, legY + 8, bandW, 14);
+    });
+    ctx.fillStyle = '#cccccc';
+    ctx.font = '10px "Roboto Mono", monospace';
+    EXPORT_LABELS.forEach((lbl, i) => {
+      const bx = 16 + (i + 1) * bandW;
+      ctx.textAlign = 'center';
+      ctx.fillText(lbl, bx, legY + 36);
+    });
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#888';
+    ctx.font = '10px Roboto, sans-serif';
+    ctx.fillText('Dades: Meteocat', 16, EXPORT_H - 10);
+  }
+
+  photoBtn.addEventListener('click', async () => {
+    if (!currentTs){
+      alert('Encara no hi ha cap frame carregat.');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = EXPORT_W;
+    canvas.height = EXPORT_H;
+    const ctx = canvas.getContext('2d');
+    await dibuixaFrame(ctx, currentTs);
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `echotops_${currentTs}.png`;
+    a.click();
+  });
+
+  const MAX_GIF_FRAMES = 200;
+
+  gifBtn.addEventListener('click', async () => {
+    const inici = new Date(gifDtStart.value + ':00Z');
+    const fi = new Date(gifDtEnd.value + ':00Z');
+    if (isNaN(inici) || isNaN(fi) || inici >= fi){
+      alert('Comprova el rang de dates (inici ha de ser abans que fi).');
+      return;
+    }
+    let tsRang = manifest.timestamps.filter(ts => {
+      const d = tsToDate(ts);
+      return d >= inici && d <= fi;
+    });
+    if (tsRang.length === 0){
+      alert('No hi ha frames disponibles en aquest rang.');
+      return;
+    }
+    if (tsRang.length > MAX_GIF_FRAMES){
+      exportProgress.textContent = `Rang massa llarg (${tsRang.length} frames): es farà servir només els primers ${MAX_GIF_FRAMES}.`;
+      tsRang = tsRang.slice(0, MAX_GIF_FRAMES);
+    }
+
+    gifBtn.disabled = true;
+    exportProgress.textContent = 'Carregant el codificador de GIF…';
+
+    let workerBlobUrl;
+    try{
+      const workerResp = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
+      const workerBlob = await workerResp.blob();
+      workerBlobUrl = URL.createObjectURL(workerBlob);
+    }catch(e){
+      exportProgress.textContent = 'Error carregant el codificador de GIF (sense connexió?).';
+      gifBtn.disabled = false;
+      return;
+    }
+
+    const gif = new GIF({ workers: 3, quality: 12, width: EXPORT_W, height: EXPORT_H, workerScript: workerBlobUrl });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = EXPORT_W;
+    canvas.height = EXPORT_H;
+    const ctx = canvas.getContext('2d');
+
+    for (let i = 0; i < tsRang.length; i++){
+      exportProgress.textContent = `Preparant frame ${i + 1} / ${tsRang.length}…`;
+      await dibuixaFrame(ctx, tsRang[i]);
+      gif.addFrame(ctx, { copy: true, delay: 250 });
+    }
+
+    exportProgress.textContent = 'Codificant el GIF… (pot trigar un minut)';
+    gif.on('finished', (blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `echotops_${tsRang[0]}_${tsRang[tsRang.length-1]}.gif`;
+      a.click();
+      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(workerBlobUrl);
+      exportProgress.textContent = `GIF descarregat (${tsRang.length} frames).`;
+      gifBtn.disabled = false;
+    });
+    gif.render();
   });
 }
 </script>
