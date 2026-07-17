@@ -118,6 +118,49 @@
   }
   #live-btn:hover{ background:var(--red-dark); }
 
+  #analysis-btn{
+    font-family:var(--font-ui); font-size:11px; color:#fff; background:transparent;
+    border:1px solid rgba(255,255,255,0.4); border-radius:4px; padding:6px 10px; cursor:pointer; font-weight:500;
+  }
+  #analysis-btn:hover{ background:rgba(255,255,255,0.15); }
+  #analysis-btn.active{ background:var(--red); border-color:var(--red); }
+
+  #analysis-overlay{
+    display:none; position:fixed; inset:0; z-index:1500;
+    background:rgba(0,0,0,0.55); align-items:center; justify-content:center;
+  }
+  #analysis-overlay.visible{ display:flex; }
+  #analysis-panel{
+    background:var(--panel); border-radius:8px; padding:24px; width:min(560px, 90vw);
+    max-height:85vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.4);
+    font-family:var(--font-ui); color:var(--text);
+  }
+  #analysis-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; }
+  #analysis-header h2{ font-size:15px; font-weight:500; margin:0; line-height:1.4; }
+  #analysis-close{
+    background:transparent; border:none; font-size:18px; cursor:pointer; color:var(--text-dim);
+    flex-shrink:0; line-height:1;
+  }
+  #analysis-close:hover{ color:var(--red); }
+  #analysis-step1{ font-size:13px; color:var(--text-dim); line-height:1.5; }
+  #analysis-center-readout{ display:block; margin-top:6px; font-family:var(--font-mono); font-size:12px; color:var(--red); font-weight:500; }
+  #analysis-controls{ margin-top:16px; display:flex; flex-direction:column; gap:14px; }
+  #analysis-controls label{ font-size:13px; color:var(--text-dim); display:block; }
+  #radius-slider{ width:100%; margin-top:6px; }
+  #analysis-dates{ display:flex; gap:12px; flex-wrap:wrap; }
+  #analysis-dates input{
+    font-family:var(--font-ui); font-size:13px; padding:6px 8px; border:1px solid var(--panel-border);
+    border-radius:4px; margin-top:4px; width:100%;
+  }
+  #generate-chart-btn, #download-csv-btn{
+    font-family:var(--font-ui); font-size:13px; color:#fff; background:var(--red);
+    border:none; border-radius:4px; padding:10px 16px; cursor:pointer; font-weight:500;
+  }
+  #generate-chart-btn:hover, #download-csv-btn:hover{ background:var(--red-dark); }
+  #analysis-progress{ margin-top:16px; font-family:var(--font-mono); font-size:12px; color:var(--text-dim); }
+  #analysis-result{ margin-top:16px; }
+  #download-csv-btn{ margin-top:14px; }
+
   @media (max-width: 640px){
     #legend{ display:none; }
     #topbar h1{ font-size:13px; }
@@ -149,6 +192,7 @@
     <div id="status">
       <span class="dot" id="status-dot"></span>
       <span id="status-text">carregant…</span>
+      <button id="analysis-btn" style="margin-left:10px;">📊 ANÀLISI DE ZONA</button>
     </div>
   </div>
   <div id="legend">
@@ -166,9 +210,43 @@
       <input type="range" id="scrubber" min="0" max="0" value="0" step="1" />
     </div>
   </div>
+
+  <div id="analysis-overlay">
+    <div id="analysis-panel">
+      <div id="analysis-header">
+        <h2>Anàlisi de zona — evolució de l'alçada màxima d'echo top</h2>
+        <button id="analysis-close">✕</button>
+      </div>
+
+      <div id="analysis-step1">
+        <strong>1.</strong> Fes clic al mapa per marcar el centre de la zona a analitzar.
+        <span id="analysis-center-readout"></span>
+      </div>
+
+      <div id="analysis-controls" style="display:none;">
+        <label>
+          Radi: <span id="radius-value">5</span> km
+          <input type="range" id="radius-slider" min="1" max="20" value="5" step="1" />
+        </label>
+        <div id="analysis-dates">
+          <label>Des de: <input type="datetime-local" id="dt-start" /></label>
+          <label>Fins a: <input type="datetime-local" id="dt-end" /></label>
+        </div>
+        <button id="generate-chart-btn">Genera el gràfic</button>
+      </div>
+
+      <div id="analysis-progress" style="display:none;"></div>
+
+      <div id="analysis-result" style="display:none;">
+        <canvas id="chart-canvas" height="90"></canvas>
+        <button id="download-csv-btn">⬇ Descarrega CSV</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <script>
 // ---- Pantalla de contrasenya (protecció bàsica, no és seguretat forta) ----
 // Hash SHA-256 de la contrasenya triada. Genera'l amb:
@@ -382,6 +460,219 @@ function initMap(){
 
   loadManifest();
   setInterval(loadManifest, 5 * 60 * 1000); // GitHub Actions actualitza cada ~10 min
+
+  // ---- Anàlisi de zona ----
+  const analysisBtn = document.getElementById('analysis-btn');
+  const analysisOverlay = document.getElementById('analysis-overlay');
+  const analysisClose = document.getElementById('analysis-close');
+  const analysisStep1 = document.getElementById('analysis-step1');
+  const analysisCenterReadout = document.getElementById('analysis-center-readout');
+  const analysisControls = document.getElementById('analysis-controls');
+  const radiusSlider = document.getElementById('radius-slider');
+  const radiusValue = document.getElementById('radius-value');
+  const dtStart = document.getElementById('dt-start');
+  const dtEnd = document.getElementById('dt-end');
+  const generateChartBtn = document.getElementById('generate-chart-btn');
+  const analysisProgress = document.getElementById('analysis-progress');
+  const analysisResult = document.getElementById('analysis-result');
+  const downloadCsvBtn = document.getElementById('download-csv-btn');
+
+  let pickingCenter = false;
+  let analysisCenter = null;   // { lat, lng }
+  let analysisCircle = null;
+  let chartInstance = null;
+  let lastCsvData = null;
+
+  function obreAnalisi(){
+    analysisOverlay.classList.add('visible');
+    pickingCenter = true;
+    analysisBtn.classList.add('active');
+    // Per defecte, rang: últimes 6 hores fins a l'últim frame disponible
+    if (manifest.timestamps.length){
+      const darrer = tsToDate(manifest.timestamps[manifest.timestamps.length - 1]);
+      const inici = new Date(darrer.getTime() - 6 * 3600 * 1000);
+      dtEnd.value = darrer.toISOString().slice(0, 16);
+      dtStart.value = inici.toISOString().slice(0, 16);
+    }
+  }
+
+  function tancaAnalisi(){
+    analysisOverlay.classList.remove('visible');
+    pickingCenter = false;
+    analysisBtn.classList.remove('active');
+  }
+
+  analysisBtn.addEventListener('click', obreAnalisi);
+  analysisClose.addEventListener('click', tancaAnalisi);
+  analysisOverlay.addEventListener('click', (e) => {
+    if (e.target === analysisOverlay) tancaAnalisi();
+  });
+
+  map.on('click', (e) => {
+    if (!pickingCenter) return;
+    analysisCenter = e.latlng;
+    if (analysisCircle) map.removeLayer(analysisCircle);
+    analysisCircle = L.circle(analysisCenter, {
+      radius: parseInt(radiusSlider.value, 10) * 1000,
+      color: '#C8102E', fillColor: '#C8102E', fillOpacity: 0.15, weight: 2,
+    }).addTo(map);
+    analysisCenterReadout.textContent =
+      `Centre: ${analysisCenter.lat.toFixed(4)}, ${analysisCenter.lng.toFixed(4)}`;
+    analysisControls.style.display = 'flex';
+    pickingCenter = false;
+  });
+
+  radiusSlider.addEventListener('input', () => {
+    radiusValue.textContent = radiusSlider.value;
+    if (analysisCircle){
+      analysisCircle.setRadius(parseInt(radiusSlider.value, 10) * 1000);
+    }
+  });
+
+  function haversineKm(lat1, lon1, lat2, lon2){
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function maxDinsDelCercle(meta, center, radiusKm){
+    const [[south, west], [north, east]] = meta.bounds;
+    const { rows, cols, values } = meta.grid;
+    // Bounding box aproximat en graus per no haver de recorrer tota la graella
+    const dLat = radiusKm / 111;
+    const dLon = radiusKm / (111 * Math.cos(center.lat * Math.PI / 180));
+    const latMin = Math.max(south, center.lat - dLat);
+    const latMax = Math.min(north, center.lat + dLat);
+    const lonMin = Math.max(west, center.lng - dLon);
+    const lonMax = Math.min(east, center.lng + dLon);
+
+    const rowFrac = (lat) => (north - lat) / (north - south);
+    const colFrac = (lon) => (lon - west) / (east - west);
+    const rowStart = Math.max(0, Math.floor(rowFrac(latMax) * rows));
+    const rowEnd = Math.min(rows - 1, Math.ceil(rowFrac(latMin) * rows));
+    const colStart = Math.max(0, Math.floor(colFrac(lonMin) * cols));
+    const colEnd = Math.min(cols - 1, Math.ceil(colFrac(lonMax) * cols));
+
+    let max = null;
+    for (let r = rowStart; r <= rowEnd; r++){
+      for (let c = colStart; c <= colEnd; c++){
+        const v = values[r][c];
+        if (v === null) continue;
+        // Centre aproximat de la cel·la, per comprovar si cau dins del radi real (no només el bbox)
+        const cellLat = north - (r + 0.5) / rows * (north - south);
+        const cellLon = west + (c + 0.5) / cols * (east - west);
+        if (haversineKm(center.lat, center.lng, cellLat, cellLon) <= radiusKm){
+          if (max === null || v > max) max = v;
+        }
+      }
+    }
+    return max;
+  }
+
+  generateChartBtn.addEventListener('click', async () => {
+    if (!analysisCenter){
+      alert('Primer marca un centre fent clic al mapa.');
+      return;
+    }
+    const inici = new Date(dtStart.value);
+    const fi = new Date(dtEnd.value);
+    if (isNaN(inici) || isNaN(fi) || inici >= fi){
+      alert('Comprova el rang de dates (inici ha de ser abans que fi).');
+      return;
+    }
+    const radiusKm = parseInt(radiusSlider.value, 10);
+    const timestampsRang = manifest.timestamps.filter(ts => {
+      const d = tsToDate(ts);
+      return d >= inici && d <= fi;
+    });
+    if (timestampsRang.length === 0){
+      alert('No hi ha frames disponibles en aquest rang de dates.');
+      return;
+    }
+
+    analysisResult.style.display = 'none';
+    analysisProgress.style.display = 'block';
+    analysisProgress.textContent = `Carregant 0 / ${timestampsRang.length} frames…`;
+
+    const resultats = new Array(timestampsRang.length).fill(null);
+    const CONCURRENCIA = 12;
+    let fets = 0;
+
+    async function processaUn(i){
+      const ts = timestampsRang[i];
+      try{
+        const meta = await fetch(`data/png/${ts}.json`).then(r => r.json());
+        if (meta.grid){
+          resultats[i] = maxDinsDelCercle(meta, analysisCenter, radiusKm);
+        }
+      }catch(e){
+        console.warn('Error carregant', ts, e);
+      }
+      fets++;
+      if (fets % 10 === 0 || fets === timestampsRang.length){
+        analysisProgress.textContent = `Carregant ${fets} / ${timestampsRang.length} frames…`;
+      }
+    }
+
+    // Processem en lots per no llançar milers de fetch simultanis
+    for (let i = 0; i < timestampsRang.length; i += CONCURRENCIA){
+      const lot = timestampsRang.slice(i, i + CONCURRENCIA).map((_, j) => processaUn(i + j));
+      await Promise.all(lot);
+    }
+
+    analysisProgress.style.display = 'none';
+    analysisResult.style.display = 'block';
+
+    const labels = timestampsRang.map(ts => {
+      const { time } = fmtTs(ts);
+      return time;
+    });
+
+    if (chartInstance) chartInstance.destroy();
+    const ctx = document.getElementById('chart-canvas').getContext('2d');
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: `Alçada màxima echo top (radi ${radiusKm} km)`,
+          data: resultats,
+          borderColor: '#C8102E',
+          backgroundColor: 'rgba(200,16,46,0.1)',
+          spanGaps: false,
+          tension: 0.2,
+          pointRadius: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { title: { display: true, text: 'km' }, beginAtZero: true },
+          x: { title: { display: true, text: 'Hora (UTC)' }, ticks: { maxTicksLimit: 12 } },
+        },
+      },
+    });
+
+    lastCsvData = timestampsRang.map((ts, i) => ({ ts, valor: resultats[i] }));
+  });
+
+  downloadCsvBtn.addEventListener('click', () => {
+    if (!lastCsvData) return;
+    const linies = ['timestamp_utc,alcada_echo_top_km'];
+    for (const { ts, valor } of lastCsvData){
+      const { date, time } = fmtTs(ts);
+      linies.push(`${date} ${time},${valor === null ? '' : valor.toFixed(2)}`);
+    }
+    const blob = new Blob([linies.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `echotops_${lastCsvData[0].ts}_${lastCsvData[lastCsvData.length-1].ts}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
 }
 </script>
 </body>
