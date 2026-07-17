@@ -1,0 +1,16 @@
+# Entorn virtual de Python
+venv/
+
+# Configuració local
+.env
+
+# Fitxers de sistema
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+
+# Dades originals Meteocat (fora del repositori)
+data/raw/

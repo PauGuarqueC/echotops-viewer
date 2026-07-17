@@ -9,6 +9,9 @@ import os
 from pathlib import Path
 
 import paramiko
+from dotenv import load_dotenv
+
+load_dotenv(Path.home() / ".config" / "echotops.env")
 
 SFTP_HOST = "ftp.meteo.cat"
 SFTP_PORT = 22
@@ -16,7 +19,7 @@ SFTP_USER = "bombers"
 SFTP_PASS = os.environ["SFTP_METEOCAT_PASS"]  # ve d'un GitHub Secret
 
 REPO_ROOT = Path(__file__).parent.parent
-RAW_DIR = REPO_ROOT / "data" / "raw"
+RAW_DIR = Path.home() / "echotops-data" / "raw"
 REMOTE_DIR = "/Dades/echotops"
 FILE_SUFFIX = "TOPS130_12.tif"
 

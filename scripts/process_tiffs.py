@@ -17,8 +17,10 @@ from matplotlib import cm
 from PIL import Image
 
 REPO_ROOT = Path(__file__).parent.parent
-RAW_DIR = REPO_ROOT / "data" / "raw"
-PNG_DIR = REPO_ROOT / "data" / "png"
+DATA_ROOT = Path.home() / "echotops-data"
+
+RAW_DIR = DATA_ROOT / "raw"
+PNG_DIR = DATA_ROOT / "png"
 
 FILENAME_RE = re.compile(r"_TOP_(\d{8})_(\d{4})_TOPS130")
 
