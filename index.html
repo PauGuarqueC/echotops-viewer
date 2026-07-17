@@ -246,8 +246,8 @@
           <input type="range" id="radius-slider" min="1" max="20" value="5" step="1" />
         </label>
         <div id="analysis-dates">
-          <label>Des de: <input type="datetime-local" id="dt-start" /></label>
-          <label>Fins a: <input type="datetime-local" id="dt-end" /></label>
+          <label>Des de (UTC): <input type="datetime-local" id="dt-start" /></label>
+          <label>Fins a (UTC): <input type="datetime-local" id="dt-end" /></label>
         </div>
         <button id="generate-chart-btn">Genera el gràfic</button>
       </div>
@@ -601,8 +601,11 @@ function initMap(){
       alert('Primer marca un centre fent clic al mapa.');
       return;
     }
-    const inici = new Date(dtStart.value);
-    const fi = new Date(dtEnd.value);
+    // Els inputs datetime-local es llegeixen com a text pla i s'interpreten
+    // sempre com UTC (afegint 'Z'), per no dependre del fus horari del
+    // navegador de qui els fa servir.
+    const inici = new Date(dtStart.value + ':00Z');
+    const fi = new Date(dtEnd.value + ':00Z');
     if (isNaN(inici) || isNaN(fi) || inici >= fi){
       alert('Comprova el rang de dates (inici ha de ser abans que fi).');
       return;
