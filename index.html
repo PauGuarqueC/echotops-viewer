@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Echo Tops · ONOFRE / GRAF</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0a1216; --panel: #101c22; --panel-border: #1e323b; --grid: #22404a;
+    --text: #d9e6ea; --text-dim: #6f8790; --amber: #ff9640; --amber-dim: #7a5730;
+    --cyan: #48d8c6; --font-ui: 'IBM Plex Sans', sans-serif; --font-mono: 'IBM Plex Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text); font-family:var(--font-ui); overflow:hidden; }
+
+  /* ---- Pantalla de contrasenya ---- */
+  #gate{
+    position:fixed; inset:0; z-index:2000; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; flex-direction:column; gap:16px;
+  }
+  #gate .mark{ font-family:var(--font-mono); font-size:12px; letter-spacing:0.12em; color:var(--amber);
+    border:1px solid var(--amber-dim); padding:4px 10px; border-radius:3px; background:rgba(255,150,64,0.08); }
+  #gate h1{ font-size:18px; font-weight:600; margin:0; }
+  #gate form{ display:flex; gap:8px; }
+  #gate input{
+    font-family:var(--font-mono); font-size:14px; background:var(--panel); border:1px solid var(--panel-border);
+    color:var(--text); padding:10px 12px; border-radius:4px; width:200px;
+  }
+  #gate input:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  #gate button{
+    font-family:var(--font-mono); font-size:13px; color:var(--bg); background:var(--amber);
+    border:none; border-radius:4px; padding:10px 16px; cursor:pointer; font-weight:600;
+  }
+  #gate .error{ color:#ff5a5a; font-family:var(--font-mono); font-size:12px; min-height:16px; }
+  #app{ display:none; }
+  #app.visible{ display:block; }
+
+  #map { position:absolute; inset:0; background:#050a0d; }
+  .leaflet-container { background:#050a0d; }
+
+  #topbar{
+    position:absolute; top:0; left:0; right:0; z-index:1000;
+    display:flex; align-items:center; justify-content:space-between; padding: 14px 20px;
+    background: linear-gradient(180deg, rgba(10,18,22,0.92) 0%, rgba(10,18,22,0.0) 100%);
+    pointer-events:none;
+  }
+  #topbar .brand{ display:flex; align-items:baseline; gap:10px; pointer-events:auto; }
+  #topbar .brand .mark{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:0.12em; color:var(--amber);
+    border:1px solid var(--amber-dim); padding:3px 7px; border-radius:3px; background:rgba(255,150,64,0.08);
+  }
+  #topbar h1{ font-size:15px; font-weight:600; margin:0; letter-spacing:0.01em; }
+  #topbar .subtitle{ font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-left:4px; }
+
+  #status{
+    pointer-events:auto; font-family:var(--font-mono); font-size:12px; color:var(--text-dim);
+    display:flex; align-items:center; gap:8px; background: var(--panel); border:1px solid var(--panel-border);
+    padding:6px 12px; border-radius:4px;
+  }
+  #status .dot{ width:7px; height:7px; border-radius:50%; background:var(--cyan); box-shadow:0 0 6px var(--cyan); }
+  #status .dot.stale{ background:var(--text-dim); box-shadow:none; }
+
+  #legend{
+    position:absolute; top:64px; right:20px; z-index:1000;
+    background:var(--panel); border:1px solid var(--panel-border); border-radius:4px;
+    padding:10px 12px; font-family:var(--font-mono); font-size:11px; color:var(--text-dim); width:150px;
+  }
+  #legend .title{ color:var(--text); font-size:10px; letter-spacing:0.08em; margin-bottom:8px; text-transform:uppercase; }
+  #legend .bar{ height:10px; border-radius:2px; margin-bottom:6px;
+    background: linear-gradient(90deg, #30123b, #3e4989, #26838f, #6ece58, #fde725, #ff5a5a); }
+  #legend .scale{ display:flex; justify-content:space-between; }
+
+  #timeline-wrap{
+    position:absolute; left:0; right:0; bottom:0; z-index:1000; padding: 14px 20px 18px;
+    background: linear-gradient(0deg, rgba(10,18,22,0.95) 0%, rgba(10,18,22,0.0) 100%);
+  }
+  #timeline-panel{ background:var(--panel); border:1px solid var(--panel-border); border-radius:6px; padding:12px 16px; max-width:820px; margin:0 auto; }
+  #timeline-readout{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  #timeline-readout .ts{ font-family:var(--font-mono); font-size:20px; font-weight:600; color:var(--amber); letter-spacing:0.02em; }
+  #timeline-readout .ts .date{ color:var(--text-dim); font-size:13px; font-weight:400; margin-right:8px; }
+  #playbtn{
+    font-family:var(--font-mono); font-size:11px; color:var(--text); background:transparent;
+    border:1px solid var(--panel-border); border-radius:4px; padding:6px 12px; cursor:pointer; letter-spacing:0.06em;
+  }
+  #playbtn:hover{ border-color:var(--amber-dim); color:var(--amber); }
+
+  #scrubber{ -webkit-appearance:none; width:100%; height:26px; background:transparent; cursor:pointer; }
+  #scrubber::-webkit-slider-runnable-track{ height:3px; background:var(--grid); border-radius:2px; }
+  #scrubber::-webkit-slider-thumb{
+    -webkit-appearance:none; margin-top:-7px; width:17px; height:17px; border-radius:50%;
+    background:var(--amber); border:2px solid var(--bg); box-shadow:0 0 0 1px var(--amber-dim);
+  }
+
+  #date-select{
+    font-family:var(--font-mono); font-size:11px; color:var(--text); background:var(--panel);
+    border:1px solid var(--panel-border); border-radius:4px; padding:5px 8px; margin-left:10px;
+  }
+
+  @media (max-width: 640px){
+    #legend{ display:none; }
+    #topbar h1{ font-size:13px; }
+    #timeline-readout .ts{ font-size:16px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <span class="mark">GRAF · CTFC</span>
+  <h1>Echo Tops — accés restringit</h1>
+  <form id="gate-form">
+    <input type="password" id="gate-input" placeholder="Contrasenya" autocomplete="off" />
+    <button type="submit">Entrar</button>
+  </form>
+  <div class="error" id="gate-error"></div>
+</div>
+
+<div id="app">
+  <div id="map"></div>
+  <div id="topbar">
+    <div class="brand">
+      <span class="mark">GRAF · CTFC</span>
+      <h1>Echo Tops<span class="subtitle">&nbsp;/ radar esnjr</span></h1>
+      <select id="date-select"></select>
+    </div>
+    <div id="status">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">carregant…</span>
+    </div>
+  </div>
+  <div id="legend">
+    <div class="title">Alçada echo top</div>
+    <div class="bar"></div>
+    <div class="scale"><span>0 km</span><span>15 km</span></div>
+  </div>
+  <div id="timeline-wrap">
+    <div id="timeline-panel">
+      <div id="timeline-readout">
+        <span class="ts"><span class="date" id="ts-date">--/--/----</span><span id="ts-time">--:--</span> UTC</span>
+        <button id="playbtn">▶ REPRODUIR</button>
+      </div>
+      <input type="range" id="scrubber" min="0" max="0" value="0" step="1" />
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ---- Pantalla de contrasenya (protecció bàsica, no és seguretat forta) ----
+// Hash SHA-256 de la contrasenya triada. Genera'l amb:
+//   echo -n "la_teva_contrasenya" | sha256sum
+const PASSWORD_HASH = "a46fc0df9cdae6a19f2b5d0780ebd9a7f425f53439d1ed32e86aa16f30d10c35";
+
+async function sha256(text){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+const gate = document.getElementById('gate');
+const app = document.getElementById('app');
+
+async function tryUnlock(pw){
+  const hash = await sha256(pw);
+  if (hash === PASSWORD_HASH){
+    localStorage.setItem('echotops_auth', hash);
+    gate.style.display = 'none';
+    app.classList.add('visible');
+    initMap();
+    return true;
+  }
+  return false;
+}
+
+document.getElementById('gate-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pw = document.getElementById('gate-input').value;
+  const ok = await tryUnlock(pw);
+  if (!ok) document.getElementById('gate-error').textContent = 'Contrasenya incorrecta';
+});
+
+(async () => {
+  const saved = localStorage.getItem('echotops_auth');
+  if (saved === PASSWORD_HASH){
+    gate.style.display = 'none';
+    app.classList.add('visible');
+    initMap();
+  }
+})();
+
+// ---- Visor (només s'inicialitza un cop desbloquejat) ----
+let mapInitialized = false;
+function initMap(){
+  if (mapInitialized) return;
+  mapInitialized = true;
+
+  const map = L.map('map', { zoomControl: true, attributionControl: false }).setView([41.6, 1.6], 8);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 12, subdomains: 'abcd' }).addTo(map);
+
+  let manifest = { timestamps: [], bounds: {} };
+  let currentOverlay = null;
+  let playing = false;
+  let playTimer = null;
+
+  const scrubber = document.getElementById('scrubber');
+  const playbtn = document.getElementById('playbtn');
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const tsDate = document.getElementById('ts-date');
+  const tsTime = document.getElementById('ts-time');
+  const dateSelect = document.getElementById('date-select');
+
+  function fmtTs(ts){
+    const y = ts.slice(0,4), mo = ts.slice(4,6), d = ts.slice(6,8);
+    const h = ts.slice(9,11), mi = ts.slice(11,13);
+    return { date: `${d}/${mo}/${y}`, time: `${h}:${mi}` };
+  }
+
+  function showFrame(index){
+    if (!manifest.timestamps.length) return;
+    const ts = manifest.timestamps[index];
+    const { date, time } = fmtTs(ts);
+    tsDate.textContent = date;
+    tsTime.textContent = time;
+    scrubber.value = index;
+
+    const bounds = manifest.bounds[ts];
+    if (currentOverlay) map.removeLayer(currentOverlay);
+    currentOverlay = L.imageOverlay(`data/png/${ts}.png`, bounds, { opacity: 0.85 }).addTo(map);
+  }
+
+  function populateDateSelect(){
+    const dies = [...new Set(manifest.timestamps.map(ts => ts.slice(0,8)))];
+    dateSelect.innerHTML = dies.map(d => {
+      const label = `${d.slice(6,8)}/${d.slice(4,6)}`;
+      return `<option value="${d}">${label}</option>`;
+    }).join('');
+    dateSelect.value = dies[dies.length - 1];
+  }
+
+  dateSelect.addEventListener('change', () => {
+    const dia = dateSelect.value;
+    const idx = manifest.timestamps.findIndex(ts => ts.startsWith(dia));
+    if (idx >= 0) showFrame(idx);
+  });
+
+  scrubber.addEventListener('input', () => {
+    playing = false;
+    playbtn.textContent = '▶ REPRODUIR';
+    clearInterval(playTimer);
+    const idx = parseInt(scrubber.value, 10);
+    showFrame(idx);
+    dateSelect.value = manifest.timestamps[idx].slice(0,8);
+  });
+
+  playbtn.addEventListener('click', () => {
+    playing = !playing;
+    playbtn.textContent = playing ? '⏸ PAUSA' : '▶ REPRODUIR';
+    if (playing){
+      playTimer = setInterval(() => {
+        let next = parseInt(scrubber.value, 10) + 1;
+        if (next >= manifest.timestamps.length) next = 0;
+        showFrame(next);
+      }, 800);
+    } else {
+      clearInterval(playTimer);
+    }
+  });
+
+  async function loadManifest(){
+    try{
+      const res = await fetch(`data/png/manifest.json?_=${Date.now()}`);
+      manifest = await res.json();
+      statusDot.className = 'dot';
+      statusText.textContent = `${manifest.timestamps.length} frames`;
+      populateDateSelect();
+      showFrame(manifest.timestamps.length - 1);
+    }catch(e){
+      statusDot.className = 'dot stale';
+      statusText.textContent = 'error carregant dades';
+      console.error(e);
+    }
+  }
+
+  loadManifest();
+  setInterval(loadManifest, 5 * 60 * 1000); // GitHub Actions actualitza cada ~10 min
+}
+</script>
+</body>
+</html>

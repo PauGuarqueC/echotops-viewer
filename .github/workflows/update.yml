@@ -1,0 +1,53 @@
+name: Actualitza echo tops
+
+on:
+  schedule:
+    # GitHub no garanteix l'exactitud de l'horari (pot retardar-se uns minuts
+    # en hores de molta càrrega). */10 és un compromís raonable.
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}  # permet executar-ho manualment des de la pestanya Actions
+
+permissions:
+  contents: write
+
+concurrency:
+  group: echotops-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configura Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instal·la dependències
+        run: pip install -r requirements.txt
+
+      - name: Descarrega TIFFs nous
+        env:
+          SFTP_METEOCAT_PASS: ${{ secrets.SFTP_METEOCAT_PASS }}
+        run: python3 scripts/descarrega_echotops_sftp.py
+
+      - name: Processa a PNG
+        run: python3 scripts/process_tiffs.py
+
+      - name: Genera manifest
+        run: python3 scripts/build_manifest.py
+
+      - name: Publica canvis
+        run: |
+          git config user.name "echotops-bot"
+          git config user.email "actions@github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "Sense canvis, no cal commit."
+          else
+            git commit -m "Actualitza echo tops $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
