@@ -269,7 +269,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 <script>
 // ---- Pantalla de contrasenya (protecció bàsica, no és seguretat forta) ----
 // Hash SHA-256 de la contrasenya triada. Genera'l amb:
@@ -647,6 +647,11 @@ function initMap(){
     }
 
     analysisProgress.style.display = 'none';
+
+    if (typeof Chart === 'undefined'){
+      alert('No s\'ha pogut carregar la llibreria de gràfics (Chart.js). Comprova la connexió a internet i torna-ho a provar.');
+      return;
+    }
     resultOverlay.classList.add('visible');
 
     const labels = timestampsRang.map(ts => {
