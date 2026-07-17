@@ -81,6 +81,10 @@
   #legend .bar{ height:10px; border-radius:2px; margin-bottom:6px;
     background: linear-gradient(90deg, #30123b, #3e4989, #26838f, #6ece58, #fde725, #ff5a5a); }
   #legend .scale{ display:flex; justify-content:space-between; }
+  #hover-readout{
+    margin-top:10px; padding-top:8px; border-top:1px solid var(--panel-border);
+    color:var(--text); font-weight:500; font-size:12px;
+  }
 
   #timeline-wrap{
     position:absolute; left:0; right:0; bottom:0; z-index:1000; padding: 14px 20px 18px;
@@ -151,6 +155,7 @@
     <div class="title">Alçada echo top</div>
     <div class="bar"></div>
     <div class="scale"><span>0 km</span><span>15 km</span></div>
+    <div id="hover-readout">Passa el cursor pel mapa</div>
   </div>
   <div id="timeline-wrap">
     <div id="timeline-panel">
@@ -262,7 +267,50 @@ function initMap(){
     const bounds = manifest.bounds[ts];
     if (currentOverlay) map.removeLayer(currentOverlay);
     currentOverlay = L.imageOverlay(`data/png/${ts}.png`, bounds, { opacity: 0.85 }).addTo(map);
+
+    carregaGraella(ts, bounds);
   }
+
+  // ---- Lectura de valor sota el cursor ----
+  let graellaActual = null;   // { rows, cols, values, bounds }
+  const hoverReadout = document.getElementById('hover-readout');
+
+  async function carregaGraella(ts, bounds){
+    graellaActual = null;
+    try{
+      const meta = await fetch(`data/png/${ts}.json`).then(r => r.json());
+      if (meta.grid){
+        graellaActual = { ...meta.grid, bounds };
+      }
+    }catch(e){
+      console.warn('No s\'ha pogut carregar la graella de valors per', ts, e);
+    }
+  }
+
+  map.on('mousemove', (e) => {
+    if (!graellaActual){
+      hoverReadout.textContent = 'Sense dades de valor per aquest frame';
+      return;
+    }
+    const { lat, lng } = e.latlng;
+    const [[south, west], [north, east]] = graellaActual.bounds;
+    if (lat < south || lat > north || lng < west || lng > east){
+      hoverReadout.textContent = 'Fora de l\'àrea de radar';
+      return;
+    }
+    const rowFrac = (north - lat) / (north - south);
+    const colFrac = (lng - west) / (east - west);
+    const row = Math.min(graellaActual.rows - 1, Math.max(0, Math.floor(rowFrac * graellaActual.rows)));
+    const col = Math.min(graellaActual.cols - 1, Math.max(0, Math.floor(colFrac * graellaActual.cols)));
+    const valor = graellaActual.values[row][col];
+    hoverReadout.textContent = valor === null
+      ? 'Sense eco a aquest punt'
+      : `Echo top: ${valor.toFixed(1)} km`;
+  });
+
+  map.on('mouseout', () => {
+    hoverReadout.textContent = 'Passa el cursor pel mapa';
+  });
 
   function goLive(){
     mode = 'live';
