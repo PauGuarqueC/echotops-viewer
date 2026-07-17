@@ -248,7 +248,7 @@
     <div class="brand">
       <span class="mark">BOMBERS · GRAF</span>
       <h1>Echo Tops<span class="subtitle">&nbsp;/ dades Meteocat</span></h1>
-      <select id="date-select"></select>
+      <input type="date" id="date-select" />
       <button id="live-btn" style="display:none;">Mostra en directe (48h)</button>
     </div>
     <div id="status">
@@ -534,7 +534,7 @@ function initMap(){
     const darrer = tsToDate(manifest.timestamps[manifest.timestamps.length - 1]);
     const cutoff = new Date(darrer.getTime() - HORES_EN_VIU * 3600 * 1000);
     visibleTimestamps = manifest.timestamps.filter(ts => tsToDate(ts) >= cutoff);
-    dateSelect.value = manifest.timestamps[manifest.timestamps.length - 1].slice(0, 8);
+    dateSelect.value = diaToInputValue(manifest.timestamps[manifest.timestamps.length - 1].slice(0, 8));
 
     if (eraAlDarrer){
       showFrame(visibleTimestamps.length - 1);
@@ -550,21 +550,34 @@ function initMap(){
     mode = 'archive';
     liveBtn.style.display = 'inline-block';
     visibleTimestamps = manifest.timestamps.filter(ts => ts.startsWith(dia));
+    if (visibleTimestamps.length === 0){
+      statusText.textContent = `Arxiu · sense dades aquest dia`;
+      return;
+    }
     showFrame(0);
     const label = `${dia.slice(6,8)}/${dia.slice(4,6)}/${dia.slice(0,4)}`;
     statusText.textContent = `Arxiu · ${label} · ${visibleTimestamps.length} frames`;
   }
 
-  function populateDateSelect(){
-    const dies = [...new Set(manifest.timestamps.map(ts => ts.slice(0,8)))];
-    dateSelect.innerHTML = dies.map(d => {
-      const label = `${d.slice(6,8)}/${d.slice(4,6)}`;
-      return `<option value="${d}">${label}</option>`;
-    }).join('');
-    dateSelect.value = dies[dies.length - 1];
+  // "20260717" <-> "2026-07-17" (input type=date exigeix el format amb guions)
+  function diaToInputValue(dia){
+    return `${dia.slice(0,4)}-${dia.slice(4,6)}-${dia.slice(6,8)}`;
+  }
+  function inputValueToDia(v){
+    return v.replace(/-/g, '');
   }
 
-  dateSelect.addEventListener('change', () => goToDay(dateSelect.value));
+  function populateDateSelect(){
+    if (!manifest.timestamps.length) return;
+    const dies = [...new Set(manifest.timestamps.map(ts => ts.slice(0,8)))].sort();
+    dateSelect.min = diaToInputValue(dies[0]);
+    dateSelect.max = diaToInputValue(dies[dies.length - 1]);
+    if (!dateSelect.value){
+      dateSelect.value = diaToInputValue(dies[dies.length - 1]);
+    }
+  }
+
+  dateSelect.addEventListener('change', () => goToDay(inputValueToDia(dateSelect.value)));
   liveBtn.addEventListener('click', goLive);
 
   scrubber.addEventListener('input', () => {
