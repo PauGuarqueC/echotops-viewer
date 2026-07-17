@@ -80,9 +80,8 @@
   #legend .title{ color:var(--text); font-size:10px; letter-spacing:0.06em; margin-bottom:8px; text-transform:uppercase; font-weight:500; }
   #legend .bands{ display:flex; height:16px; border-radius:2px; overflow:hidden; }
   #legend .bands span{ flex:1; }
-  #legend .band-labels{ display:flex; margin-top:3px; font-family:var(--font-mono); font-size:9px; color:var(--text-dim); }
-  #legend .band-labels span{ flex:1; text-align:right; transform:translateX(50%); }
-  #legend .band-labels span:last-child{ transform:none; text-align:left; }
+  #legend .band-labels{ position:relative; height:14px; margin-top:2px; font-family:var(--font-mono); font-size:9px; color:var(--text-dim); }
+  #legend .band-labels span{ position:absolute; top:0; transform:translateX(-50%); white-space:nowrap; }
   #hover-readout{
     margin-top:10px; padding-top:8px; border-top:1px solid var(--panel-border);
     color:var(--text); font-weight:500; font-size:12px;
@@ -239,9 +238,19 @@
       <span style="background:#800080"></span>
     </div>
     <div class="band-labels">
-      <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
-      <span>6</span><span>7</span><span>8</span><span>10</span><span>12</span>
-      <span>14</span><span>16</span><span>20</span>
+      <span style="left:7.14%">1</span>
+      <span style="left:14.29%">2</span>
+      <span style="left:21.43%">3</span>
+      <span style="left:28.57%">4</span>
+      <span style="left:35.71%">5</span>
+      <span style="left:42.86%">6</span>
+      <span style="left:50%">7</span>
+      <span style="left:57.14%">8</span>
+      <span style="left:64.29%">10</span>
+      <span style="left:71.43%">12</span>
+      <span style="left:78.57%">14</span>
+      <span style="left:85.71%">16</span>
+      <span style="left:92.86%">20</span>
     </div>
     <div id="hover-readout">Passa el cursor pel mapa</div>
     <div id="data-credit">Dades: Meteocat</div>
