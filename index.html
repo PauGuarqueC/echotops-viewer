@@ -158,8 +158,25 @@
   }
   #generate-chart-btn:hover, #download-csv-btn:hover{ background:var(--red-dark); }
   #analysis-progress{ margin-top:16px; font-family:var(--font-mono); font-size:12px; color:var(--text-dim); }
-  #analysis-result{ margin-top:16px; }
-  #download-csv-btn{ margin-top:14px; }
+
+  #result-overlay{
+    display:none; position:fixed; inset:0; z-index:1600;
+    background:rgba(0,0,0,0.55); align-items:center; justify-content:center;
+  }
+  #result-overlay.visible{ display:flex; }
+  #result-panel{
+    background:var(--panel); border-radius:8px; padding:24px; width:min(760px, 92vw);
+    max-height:88vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.4);
+    font-family:var(--font-ui); color:var(--text);
+  }
+  #result-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:16px; }
+  #result-header h2{ font-size:16px; font-weight:500; margin:0; }
+  #result-close{
+    background:transparent; border:none; font-size:20px; cursor:pointer; color:var(--text-dim);
+    flex-shrink:0; line-height:1;
+  }
+  #result-close:hover{ color:var(--red); }
+  #result-panel #download-csv-btn{ margin-top:16px; }
 
   @media (max-width: 640px){
     #legend{ display:none; }
@@ -236,11 +253,17 @@
       </div>
 
       <div id="analysis-progress" style="display:none;"></div>
+    </div>
+  </div>
 
-      <div id="analysis-result" style="display:none;">
-        <canvas id="chart-canvas" height="90"></canvas>
-        <button id="download-csv-btn">⬇ Descarrega CSV</button>
+  <div id="result-overlay">
+    <div id="result-panel">
+      <div id="result-header">
+        <h2>Resultat — evolució de l'alçada màxima d'echo top</h2>
+        <button id="result-close">✕</button>
       </div>
+      <canvas id="chart-canvas" height="90"></canvas>
+      <button id="download-csv-btn">⬇ Descarrega CSV</button>
     </div>
   </div>
 </div>
@@ -474,7 +497,8 @@ function initMap(){
   const dtEnd = document.getElementById('dt-end');
   const generateChartBtn = document.getElementById('generate-chart-btn');
   const analysisProgress = document.getElementById('analysis-progress');
-  const analysisResult = document.getElementById('analysis-result');
+  const resultOverlay = document.getElementById('result-overlay');
+  const resultClose = document.getElementById('result-close');
   const downloadCsvBtn = document.getElementById('download-csv-btn');
 
   let pickingCenter = false;
@@ -504,8 +528,9 @@ function initMap(){
 
   analysisBtn.addEventListener('click', obreAnalisi);
   analysisClose.addEventListener('click', tancaAnalisi);
-  analysisOverlay.addEventListener('click', (e) => {
-    if (e.target === analysisOverlay) tancaAnalisi();
+  resultClose.addEventListener('click', () => resultOverlay.classList.remove('visible'));
+  resultOverlay.addEventListener('click', (e) => {
+    if (e.target === resultOverlay) resultOverlay.classList.remove('visible');
   });
 
   map.on('click', (e) => {
@@ -623,7 +648,7 @@ function initMap(){
     }
 
     analysisProgress.style.display = 'none';
-    analysisResult.style.display = 'block';
+    resultOverlay.classList.add('visible');
 
     const labels = timestampsRang.map(ts => {
       const { time } = fmtTs(ts);
