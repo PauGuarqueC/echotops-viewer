@@ -71,11 +71,27 @@ def tiff_to_png(tiff_path: Path, out_png: Path, out_json: Path):
 
     Image.fromarray(rgba, mode="RGBA").save(out_png)
 
+    # Graella de valors submostrejada (lleugera) perquè el frontend pugui
+    # mostrar el valor numèric sota el cursor sense haver de descarregar
+    # el TIFF sencer. La resolució completa és massa pesada per servir-la
+    # al navegador; ~60 columnes és de sobres per a un hover aproximat.
+    step = max(1, max(data.shape) // 60)
+    grid = data[::step, ::step]
+    grid_values = [
+        [round(float(v), 2) if v > 0 else None for v in row]
+        for row in grid
+    ]
+
     meta = {
         "bounds": [[float(south), float(west)], [float(north), float(east)]],
         "vmin": VMIN,
         "vmax": VMAX,
         "data_max": float(np.nanmax(data)),
+        "grid": {
+            "rows": grid.shape[0],
+            "cols": grid.shape[1],
+            "values": grid_values,
+        },
     }
     out_json.write_text(json.dumps(meta))
 
