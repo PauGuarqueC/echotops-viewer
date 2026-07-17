@@ -2,9 +2,12 @@ name: Actualitza echo tops
 
 on:
   schedule:
-    # GitHub no garanteix l'exactitud de l'horari (pot retardar-se uns minuts
-    # en hores de molta càrrega). */10 és un compromís raonable.
-    - cron: "*/10 * * * *"
+    # GitHub retarda sovint els cron a hores "rodones" (:00, :10, :20...)
+    # perquè és quan més repositoris els disparen alhora. Desplacem l'inici
+    # uns minuts (3, 9, 15, 21...) per evitar aquesta congestió.
+    # El FTP publica un producte nou cada 6 min, per això fem servir aquest
+    # mateix interval (evita quedar-nos sistemàticament un pas enrere).
+    - cron: "3-59/6 * * * *"
   workflow_dispatch: {}  # permet executar-ho manualment des de la pestanya Actions
 
 permissions:
