@@ -452,7 +452,7 @@ function initMap(){
     satelit: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       { maxZoom: 12, crossOrigin: true }),
   };
-  let currentBase = 'fosc';
+  let currentBase = 'clar';
   baseLayers[currentBase].addTo(map);
 
   const BasemapControl = L.Control.extend({
