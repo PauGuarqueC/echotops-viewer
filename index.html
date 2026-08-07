@@ -110,10 +110,21 @@
     background:var(--red); border:2px solid #fff; box-shadow:0 0 0 1px var(--red-dark);
   }
 
+
   #date-select{
     font-family:var(--font-ui); font-size:12px; color:var(--text); background:#fff;
     border:1px solid rgba(255,255,255,0.4); border-radius:4px; padding:5px 8px; margin-left:6px;
   }
+
+  .basemap-control{
+    background:var(--panel); border:1px solid var(--panel-border); border-radius:4px;
+    padding:6px 8px; box-shadow:0 2px 8px rgba(0,0,0,0.2); margin-bottom:6px !important;
+  }
+  .basemap-control select{
+    font-family:var(--font-ui); font-size:12px; color:var(--text); background:#fff;
+    border:1px solid var(--panel-border); border-radius:3px; padding:4px 6px; cursor:pointer;
+  }
+
   #live-btn{
     font-family:var(--font-ui); font-size:11px; color:#fff; background:var(--red);
     border:none; border-radius:4px; padding:6px 12px; margin-left:8px; cursor:pointer; font-weight:500;
@@ -427,7 +438,47 @@ function initMap(){
   mapInitialized = true;
 
   const map = L.map('map', { zoomControl: true, attributionControl: false }).setView([41.6, 1.6], 8);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 12, subdomains: 'abcd', crossOrigin: true }).addTo(map);
+
+  // ---- Fons de mapa seleccionables ----
+  const baseLayers = {
+    fosc: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      { maxZoom: 12, subdomains: 'abcd', crossOrigin: true }),
+    clar: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      { maxZoom: 12, subdomains: 'abcd', crossOrigin: true }),
+    topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+      { maxZoom: 12, subdomains: 'abc', crossOrigin: true }),
+    satelit: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 12, crossOrigin: true }),
+  };
+  let currentBase = 'fosc';
+  baseLayers[currentBase].addTo(map);
+
+  const BasemapControl = L.Control.extend({
+    options: { position: 'bottomleft' },
+    onAdd: function(){
+      const div = L.DomUtil.create('div', 'basemap-control');
+      div.innerHTML = `
+        <select id="basemap-select">
+          <option value="fosc">Fosc</option>
+          <option value="clar">Clar</option>
+          <option value="topo">Topogràfic</option>
+          <option value="satelit">Satèl·lit</option>
+        </select>`;
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      const select = div.querySelector('#basemap-select');
+      select.value = currentBase;
+      select.addEventListener('change', () => {
+        map.removeLayer(baseLayers[currentBase]);
+        currentBase = select.value;
+        baseLayers[currentBase].addTo(map);
+        // el fons ha d'anar sempre per sota de l'overlay del radar actiu
+        if (currentOverlay) currentOverlay.bringToFront();
+      });
+      return div;
+    },
+  });
+  map.addControl(new BasemapControl());
 
   let manifest = { timestamps: [], bounds: {} };
   let visibleTimestamps = [];   // el subconjunt que controla l'scrubber ara mateix
