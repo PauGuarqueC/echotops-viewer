@@ -119,11 +119,13 @@
   .basemap-control{
     background:var(--panel); border:1px solid var(--panel-border); border-radius:4px;
     padding:6px 8px; box-shadow:0 2px 8px rgba(0,0,0,0.2); margin-bottom:6px !important;
+    position:relative; z-index:2000;
   }
   .basemap-control select{
     font-family:var(--font-ui); font-size:12px; color:var(--text); background:#fff;
     border:1px solid var(--panel-border); border-radius:3px; padding:4px 6px; cursor:pointer;
   }
+  .leaflet-bottom.leaflet-left{ z-index:1500 !important; }
 
   #live-btn{
     font-family:var(--font-ui); font-size:11px; color:#fff; background:var(--red);
