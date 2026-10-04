@@ -446,6 +446,8 @@ function initMap(){
   const CARTO_API_KEY = 'cb1_2avx_1_d5adbbe30562bdab4c58877d';
 
   const baseLayers = {
+    icgc: L.tileLayer('https://geoserveis.icgc.cat/servei/catalunya/mapa-base/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=administratiu&STYLE=default&FORMAT=image/png&TILEMATRIXSET=MON3857NW&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+      { maxZoom: 12, crossOrigin: true }),
     fosc: L.tileLayer(`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`,
       { maxZoom: 12, subdomains: 'abcd', crossOrigin: true }),
     clar: L.tileLayer(`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`,
@@ -455,7 +457,7 @@ function initMap(){
     satelit: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       { maxZoom: 12, crossOrigin: true }),
   };
-  let currentBase = 'clar';
+  let currentBase = 'icgc';
   baseLayers[currentBase].addTo(map);
 
   const BasemapControl = L.Control.extend({
@@ -464,6 +466,7 @@ function initMap(){
       const div = L.DomUtil.create('div', 'basemap-control');
       div.innerHTML = `
         <select id="basemap-select">
+          <option value="icgc">Comarques i relleu (ICGC)</option>
           <option value="fosc">Fosc</option>
           <option value="clar">Clar</option>
           <option value="topo">Topogràfic</option>
