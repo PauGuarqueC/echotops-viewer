@@ -9,7 +9,7 @@
     ['rgb(170,0,30)', '55'], ['rgb(210,0,170)', '60'], ['rgb(150,60,220)', '65']];
   const NOWC_COL = { 1: '#FFC800', 2: '#FF7800', 3: '#E61428' };
   const NOWC_NOM = { 1: 'Vigilància', 2: 'Atenció', 3: 'Alerta' };
-  const NOWC_COLS = ['nivell', 'lat', 'lon', 'area_km2', 'enganxada_min', 'classe_max', 'mm_mitjana', 'mm_max', 'mm_h_ara', 's', 'w', 'n', 'e'];
+  const NOWC_COLS = ['nivell', 'lat', 'lon', 'area_km2', 'enganxada_min', 'classe_max', 'mm_mitjana', 'mm_max', 'mm_h_ara', 's', 'w', 'n', 'e', 'dist_costa_km'];
   const NOWC_DBZ = { 6: '35–40', 7: '40–45', 8: '45–50', 9: '50–55', 10: '55–60', 11: '60–65', 12: '> 65' };
   const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1';
   const nowcOberts = [];   // avisos que continuen oberts: [{id, c, horaTxt}] (es conserven en recarregar la pàgina)
@@ -56,6 +56,8 @@
   })();
 
   // avisos.json guarda el quadrat com a bbox [[S,W],[N,E]]; l'historial, com a columnes s,w,n,e
+  const NOWC_COL_MAR = '#7fa6c9';
+  const nowcEsMar = c => c.mar === true || (c.dist_costa_km > (nowc.ultim && nowc.ultim.parametres && nowc.ultim.parametres.dist_costa_km || 20));
   const nowcNorm = c => (c.s !== undefined) ? c : Object.assign({}, c, { s: c.bbox[0][0], w: c.bbox[0][1], n: c.bbox[1][0], e: c.bbox[1][1] });
 
   function nowcDurada(min){
@@ -66,8 +68,10 @@
   // Mateix contingut al popup del mapa i als avisos fixos
   function nowcHtml(c, horaTxt, ara){
     const f = (t, v) => `<div style="margin-top:2px;"><span style="opacity:.7">${t}</span> ${v}</div>`;
-    return `<b style="color:${NOWC_COL[c.nivell]}">${NOWC_NOM[c.nivell]}</b> · radar de les ${horaTxt}` +
+    const mar = nowcEsMar(c);
+    return (mar ? `<b style="color:${NOWC_COL_MAR}">Sobre el mar</b>` : `<b style="color:${NOWC_COL[c.nivell]}">${NOWC_NOM[c.nivell]}</b>`) + ` · radar de les ${horaTxt}` +
       `<div style="margin-top:2px;">Tempesta aturada fa <b>${nowcDurada(c.enganxada_min)}</b></div>` +
+      (mar ? `<div style="margin-top:2px;opacity:.8">A ~${c.dist_costa_km} km de la costa: no genera avís</div>` : '') +
       f('Intensitat de pluja:', `<b>~${c.mm_h_ara} mm/h</b>`) +
       f('Acumulat des que s\'ha aturat:', `<b>~${c.mm_mitjana} mm</b> de mitjana · fins a <b>~${c.mm_max} mm</b>`) +
       f('Reflectivitat màxima:', `${NOWC_DBZ[c.classe_max] || '> 35'} dBZ`);
@@ -147,7 +151,7 @@
     const horaTxt = nowcHoraLocal(fi), ara = Date.now();
     nowc.vistos = nowc.vistos.filter(r => ara - r.last < 6 * 3600000);
     let maxNou = 0;
-    u.cel_les.map(nowcNorm).forEach(c => {
+    u.cel_les.map(nowcNorm).filter(c => !nowcEsMar(c)).forEach(c => {
       const cy = (c.s + c.n) / 2, cx = (c.w + c.e) / 2;
       let r = nowc.vistos.find(v => Math.abs(v.lat - cy) < 0.1 && Math.abs(v.lon - cx) < 0.13 && ara - v.last < 90 * 60000);
       const nova = !r, puja = r && c.nivell > r.nivell;
@@ -271,9 +275,11 @@
     }
     cels.forEach(c => {
       // quadrat de la cel·la + punt al mig
-      L.rectangle([[c.s, c.w], [c.n, c.e]], { color: NOWC_COL[c.nivell], weight: 2, fillColor: NOWC_COL[c.nivell], fillOpacity: 0.08, interactive: false }).addTo(nowc.marcs);
+      const mar = nowcEsMar(c);
+      const col = mar ? NOWC_COL_MAR : NOWC_COL[c.nivell];
+      L.rectangle([[c.s, c.w], [c.n, c.e]], { color: col, weight: mar ? 1.5 : 2, dashArray: mar ? '5 5' : null, fillColor: col, fillOpacity: mar ? 0.05 : 0.08, interactive: false }).addTo(nowc.marcs);
       const centre = [(c.s + c.n) / 2, (c.w + c.e) / 2];
-      const m = L.circleMarker(centre, { radius: 7 + c.nivell * 2, color: '#fff', weight: 2, fillColor: NOWC_COL[c.nivell], fillOpacity: 0.95 });
+      const m = L.circleMarker(centre, { radius: mar ? 6 : 7 + c.nivell * 2, color: '#fff', weight: 2, fillColor: col, fillOpacity: mar ? 0.7 : 0.95 });
       m.on('click', () => {
         if (typeof pickingCenter !== 'undefined' && pickingCenter) return;
         L.popup({ maxWidth: 300 }).setLatLng(centre).setContent(nowcHtml(c, hora(clau), esUltim)).openOn(map);
@@ -281,9 +287,11 @@
       m.addTo(nowc.marcs);
     });
     nowc.marcs.addTo(map);
-    const n = i => cels.filter(c => c.nivell === i).length;
+    const terra = cels.filter(c => !nowcEsMar(c)), nMar = cels.length - terra.length;
+    const n = i => terra.filter(c => c.nivell === i).length;
     const fila = (i, t) => n(i) ? `<span style="color:${NOWC_COL[i]}">●</span> ${n(i)} ${t}` : '';
-    info.innerHTML = [fila(3, 'alerta'), fila(2, 'atenció'), fila(1, 'vigilància')].filter(Boolean).join(' · ') +
+    info.innerHTML = [fila(3, 'alerta'), fila(2, 'atenció'), fila(1, 'vigilància'),
+        nMar ? `<span style="color:${NOWC_COL_MAR}">●</span> ${nMar} a mar` : ''].filter(Boolean).join(' · ') +
       `<br>radar de les ${hora(clau)}${vell}`;
   }
 

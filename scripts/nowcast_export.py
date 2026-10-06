@@ -50,6 +50,41 @@ ESCALA_REFL = 3
 NOMS = {1: "Vigilància", 2: "Atenció", 3: "Alerta"}
 
 
+def distancia_costa(lb, H, W, cache):
+    """Matriu (H,W) amb els km fins al píxel de terra més proper (0 a terra). None si no es pot calcular.
+    Es calcula una vegada amb la màscara terra/mar del paquet `global-land-mask` i es desa a `cache`."""
+    s, w = lb[0]
+    n, e = lb[1]
+    clau = np.array([s, w, n, e, H, W], float)
+    cache = Path(cache)
+    try:
+        if cache.exists():
+            z = np.load(cache)
+            if z["clau"].shape == clau.shape and np.allclose(z["clau"], clau):
+                return z["dist"]
+    except Exception:
+        pass
+    try:
+        from global_land_mask import globe
+    except ImportError:
+        print("AVÍS: falta 'global-land-mask' (pip install global-land-mask): no es distingeix mar de terra")
+        return None
+    sub = 3
+    lats = n - (np.arange(H * sub) + 0.5) / (H * sub) * (n - s)
+    lons = w + (np.arange(W * sub) + 0.5) / (W * sub) * (e - w)
+    terra_fina = globe.is_land(lats[:, None], lons[None, :])
+    terra = terra_fina.reshape(H, sub, W, sub).mean(axis=(1, 3)) >= 0.25      # píxel costaner = terra
+    km_y = (n - s) / H * 111.2
+    km_x = (e - w) / W * 111.2 * np.cos(np.radians((n + s) / 2))
+    dist = ndimage.distance_transform_edt(~terra, sampling=(km_y, km_x)).astype(np.float32)
+    try:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(cache, clau=clau, dist=dist)
+    except Exception as ex:
+        print("AVÍS: no s'ha pogut desar la màscara de costa:", ex)
+    return dist
+
+
 def nivell(a):
     d, mm = a["enganxada_min"], a["mm_mitjana"]
     if d >= 120 and mm >= 40:
@@ -70,6 +105,9 @@ def main():
     ap.add_argument("--bbox", type=float, nargs=4, default=BBOX_CAT, metavar=("LON0", "LAT0", "LON1", "LAT1"))
     ap.add_argument("--historial", type=float, default=48, help="hores d'historial a calcular (0 = només l'últim)")
     ap.add_argument("--no-refl", action="store_true", help="no genera les imatges de reflectivitat")
+    ap.add_argument("--dist-costa", type=float, default=20,
+                    help="km: cel·les a més d'aquesta distància de la terra es marquen com a 'mar' i no fan avís")
+    ap.add_argument("--cache-costa", default=str(Path.home() / "echotops-data" / "dist_costa.npz"))
     ap.add_argument("--final", help="AAAAMMDDHHMM UTC (per defecte, l'últim fotograma)")
     a = ap.parse_args()
 
@@ -89,6 +127,7 @@ def main():
     (s, w), (n, e) = lb
     H, W = cub.shape[1:]
     mm_h = P.taula_mm_h()
+    dist_costa = distancia_costa(lb, H, W, a.cache_costa)
 
     def avisos_fotograma(k):
         """Cel·les amb nivell >= 1 a l'índex k (amb màscara)."""
@@ -100,7 +139,9 @@ def main():
             mask = av["mask"]
             mmh_ara = float(mm_h[np.minimum(cub[k][mask], 12)].mean())
             ys, xs = np.nonzero(mask)
+            d_costa = float(dist_costa[mask].min()) if dist_costa is not None else 0.0
             av.update({
+                "dist_costa_km": round(d_costa), "mar": bool(d_costa > a.dist_costa),
                 "nivell": niv, "nom": NOMS[niv],
                 "lat": round(n - (av["cy"] + 0.5) / H * (n - s), 4),
                 "lon": round(w + (av["cx"] + 0.5) / W * (e - w), 4),
@@ -135,7 +176,7 @@ def main():
         for av in avisos_fotograma(kk):
             (bs, bw), (bn, be) = av["bbox"]
             files.append([av["nivell"], av["lat"], av["lon"], av["area_km2"], av["enganxada_min"], av["classe_max"],
-                          av["mm_mitjana"], av["mm_max"], av["mm_h_ara"], bs, bw, bn, be])
+                          av["mm_mitjana"], av["mm_max"], av["mm_h_ara"], bs, bw, bn, be, av["dist_costa_km"]])
         if files:
             hist[ts[kk].strftime("%Y%m%d%H%M")] = files
 
@@ -166,20 +207,22 @@ def main():
                 f.unlink()
     (tmp / "avisos.json").write_text(json.dumps({
         "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "bounds": lb,
-        "parametres": {"llindar_classe": a.llindar, "min_area_km2": round(a.min_px * 6.9)},
+        "parametres": {"llindar_classe": a.llindar, "min_area_km2": round(a.min_px * 6.9),
+                       "dist_costa_km": a.dist_costa},
         "cel_les": cel_les,
     }, separators=(",", ":")))
     (tmp / "historial.json").write_text(json.dumps({
         "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "pas_min": P.PAS_MIN, "hores": a.historial,
         "sense_dades": sense, "fotogrames": hist,
-        "columnes": ["nivell", "lat", "lon", "area_km2", "enganxada_min", "classe_max", "mm_mitjana", "mm_max", "mm_h_ara", "s", "w", "n", "e"],
+        "columnes": ["nivell", "lat", "lon", "area_km2", "enganxada_min", "classe_max", "mm_mitjana", "mm_max", "mm_h_ara", "s", "w", "n", "e", "dist_costa_km"],
     }, separators=(",", ":")))
     dest = Path(a.sortida)
     if dest.exists():
         shutil.rmtree(dest)
     tmp.rename(dest)
-    per_niv = {i: sum(1 for c in cel_les if c["nivell"] == i) for i in (1, 2, 3)}
-    print(f"OK {fi:%Y-%m-%d %H:%M}Z | cel·les enganxades: vigilància {per_niv[1]}, atenció {per_niv[2]}, alerta {per_niv[3]}")
+    per_niv = {i: sum(1 for c in cel_les if c["nivell"] == i and not c["mar"]) for i in (1, 2, 3)}
+    n_mar = sum(1 for c in cel_les if c["mar"])
+    print(f"OK {fi:%Y-%m-%d %H:%M}Z | cel·les enganxades: vigilància {per_niv[1]}, atenció {per_niv[2]}, alerta {per_niv[3]} | a mar (sense avís): {n_mar}")
 
 
 if __name__ == "__main__":
