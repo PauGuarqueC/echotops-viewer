@@ -526,6 +526,7 @@ function initMap(){
   const NOWC_NOM = { 1: 'Vigilància', 2: 'Atenció', 3: 'Alerta' };
   const NOWC_COLS = ['nivell', 'lat', 'lon', 'area_km2', 'enganxada_min', 'classe_max', 'mm_mitjana', 'mm_max', 'mm_h_ara', 's', 'w', 'n', 'e', 'dist_costa_km'];
   const NOWC_DBZ = { 6: '35–40', 7: '40–45', 8: '45–50', 9: '50–55', 10: '55–60', 11: '60–65', 12: '> 65' };
+  const lim = { dades: null, carregant: false };
   const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1', NOWC_LS_MOV = 'nowcast_mov_v1', NOWC_LS_SAT = 'nowcast_sat_v2', NOWC_LS_CAPA = 'nowcast_capa_v1';
   const nowcOberts = [];   // avisos que continuen oberts: [{id, c, horaTxt}] (es conserven en recarregar la pàgina)
   const nowcDesaOberts = () => { try{ localStorage.setItem(NOWC_LS_OB, JSON.stringify(nowcOberts)); }catch(e){} };
@@ -1420,6 +1421,27 @@ function initMap(){
   modRefresca();
   setInterval(modRefresca, 15 * 60 * 1000);
 
+  // ---- Contorns i noms a les exportacions (imatge i GIF), no al visor ----
+  // Costa, fronteres i províncies (data/limits.json) i els noms (tessel·les CARTO "only_labels") es dibuixen per sobre de les capes de dades.
+  async function limCarrega(){
+    if (lim.dades || lim.carregant) return;
+    lim.carregant = true;
+    try{ lim.dades = await fetch('data/limits.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }); }catch(e){ console.warn('limits.json', e); }
+    lim.carregant = false;
+  }
+  function expLimits(ctx, P, k){
+    const d = lim.dades; if (!d) return;
+    const capa = (linies, w, dash) => {
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      const traça = () => { ctx.beginPath(); linies.forEach(l => l.forEach((q, i) => { const p = P(q); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); })); ctx.stroke(); };
+      ctx.setLineDash([]); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = (w + 2.2) * k; traça();
+      ctx.setLineDash(dash ? dash.map(v => v * k) : []); ctx.strokeStyle = 'rgba(24,35,47,.9)'; ctx.lineWidth = w * k; traça();
+      ctx.setLineDash([]);
+    };
+    capa(d.prov || [], 0.8, [2, 3]); capa(d.fronteres || [], 1.5, [6, 4]); capa(d.costa || [], 1.2);
+  }
+  const limEtiqCapa = tipus => L.tileLayer(`https://{s}.basemaps.cartocdn.com/${tipus}_only_labels/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, { maxZoom: 12, subdomains: 'abcd', crossOrigin: true });
+
   // ---- Exportació d'imatge: l'usuari tria l'àrea i es compon (a alta resolució) amb les capes actives i les seves llegendes ----
   const EXP = { actiu: false, bar: null, caixa: null, ocupat: false, net: null };
   const EXP_FONT = 'Roboto, "Helvetica Neue", Arial, sans-serif', EXP_MONO = '"Roboto Mono", ui-monospace, Menlo, monospace';
@@ -1561,7 +1583,7 @@ function initMap(){
         ctx.beginPath(); ctx.arc(p[0], p[1], l.getRadius() * k, 0, 2 * Math.PI); traç(l);
       }else if (l instanceof L.Polyline){
         const ll = l.getLatLngs(); ctx.beginPath();
-        ll.forEach((q, i) => { const p = P(q); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
+        (Array.isArray(ll[0]) ? ll : [ll]).forEach(part => part.forEach((q, i) => { const p = P(q); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }));
         traç(l);
       }else if (l instanceof L.Marker && l._exp){ marcadors.push(l); }
     }));
@@ -1657,6 +1679,13 @@ function initMap(){
         if (!im) continue;
         const b = ov.getBounds(), a = P(b.getNorthWest()), c = P(b.getSouthEast());
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
+      }
+      if (!opt.senseLimits){
+        await limCarrega(); expLimits(ctx, P, k);
+        const l = opt.etiq || (opt.etiq = limEtiqCapa(currentBase === 'fosc' ? 'dark' : 'light')), zt = Math.min(12, Math.round(Zf)), sc = Math.pow(2, Zf - zt);
+        await expTessel(ctx, { tam: 256, zt, nw, se, alpha: 1, prog: () => {},
+          url: (x, y) => { l._tileZoom = zt; return l.getTileUrl({ x, y, z: zt }); },
+          rect: (x, y) => [x * 256 * sc - org.x, y * 256 * sc - org.y, 256 * sc, 256 * sc] });
       }
       expVectors(ctx, P, k);
       ctx.restore();
