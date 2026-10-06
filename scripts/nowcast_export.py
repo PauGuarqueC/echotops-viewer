@@ -144,7 +144,7 @@ def moviment_cadena(cub, ok, k, y0, y1, x0, x1, passos=6, R=8, marge=6, cor_min=
     return (ty / n, tx / n, n) if n >= 2 else None
 
 
-def segueix(cub, ok, lb, ts, llindar, min_px, k_min_vel=0, finestra_min=60, min_px_pista=4):
+def segueix(cub, ok, lb, ts, llindar, min_px, k_min_vel=0, finestra_min=60, min_px_pista=4, mm_h=None):
     """Segueix les cel·les intenses (classe >= llindar) fotograma a fotograma.
     Retorna {k: [[id, lat, lon, vel_kmh|None, rumb_graus|None], ...]} amb ids estables entre fotogrames.
     Emparellament voraç amb la posició predita (posició anterior + velocitat); la velocitat és un ajust lineal
@@ -172,7 +172,7 @@ def segueix(cub, ok, lb, ts, llindar, min_px, k_min_vel=0, finestra_min=60, min_
         cand = []
         for pid, p in pistes.items():
             gap = k - p["k"]
-            if gap > 2:
+            if gap > 3:
                 continue
             y0, x0 = p["pos"][-1][1:]
             if p["vel"] is not None:
@@ -221,9 +221,12 @@ def segueix(cub, ok, lb, ts, llindar, min_px, k_min_vel=0, finestra_min=60, min_
             lat = n_ - (cy + 0.5) / H * (n_ - s_)
             lon = w_ + (cx + 0.5) / W * (e_ - w_)
             if mida >= min_px:
-                files.append([pid, round(lat, 3), round(lon, 3), vel, rumb])
+                fila = [pid, round(lat, 3), round(lon, 3), vel, rumb]
+                if mm_h is not None:      # intensitat mitjana de la cel·la (mm/h) per a l'evolució al gràfic
+                    fila.append(round(float(mm_h[np.minimum(cub[k][lab == (j + 1)], 12)].mean()), 1))
+                files.append(fila)
         sortida[k] = files
-        for pid in [q for q, p in pistes.items() if k - p["k"] > 2]:
+        for pid in [q for q, p in pistes.items() if k - p["k"] > 3]:
             del pistes[pid]
     return sortida
 
@@ -351,12 +354,12 @@ def main():
                 f.unlink()
     if a.hores_moviment > 0:
         k_min = next((kk for kk in range(len(ts)) if (fi - ts[kk]).total_seconds() <= a.hores_moviment * 3600), 0)
-        seg = segueix(cub, ok, lb, ts, a.llindar, a.min_px, k_min_vel=k_min)
+        seg = segueix(cub, ok, lb, ts, a.llindar, a.min_px, k_min_vel=k_min, mm_h=mm_h)
         fr = {ts[kk].strftime("%Y%m%d%H%M"): v for kk, v in seg.items()
               if (fi - ts[kk]).total_seconds() <= a.hores_moviment * 3600}
         (tmp / "moviment.json").write_text(json.dumps({
             "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "pas_min": P.PAS_MIN, "hores": a.hores_moviment,
-            "columnes": ["id", "lat", "lon", "vel_kmh", "rumb"], "frames": fr,
+            "columnes": ["id", "lat", "lon", "vel_kmh", "rumb", "mm_h"], "frames": fr,
         }, separators=(",", ":")))
     (tmp / "avisos.json").write_text(json.dumps({
         "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "bounds": lb,

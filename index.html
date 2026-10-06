@@ -616,6 +616,20 @@ function initMap(){
 
   // ---- Evolució de la tempesta: intensitat (línia, mm/h) i acumulació (barres, mm) al llarg del temps ----
   // L'historial no porta identificador de cel·la: se segueix pel fotograma veí més proper amb una durada d'aturada coherent.
+  // Si moviment.json porta la intensitat de cada pista, es dibuixa tota la vida de la cel·la (des de la primera detecció)
+  function nowcSeriePista(c){
+    const D = nowc.mov;
+    if (!D || !c.mov || c.mov.id === undefined || !D.columnes || D.columnes.indexOf('mm_h') < 0) return null;
+    const pas = (D.pas_min || 10) / 60, S = [];
+    let acum = 0;
+    Object.keys(D.frames).sort().forEach(k => {
+      const r = D.frames[k].find(q => q[0] === c.mov.id);
+      if (!r || r[5] === undefined) return;
+      acum += r[5] * pas;
+      S.push({ ms: nowcMs(k), mmh: r[5], acum: Math.round(acum * 10) / 10 });
+    });
+    return S.length >= 2 ? S : null;
+  }
   function nowcSerie(c, clau){
     const h = nowc.hist; if (!h || !h.fotogrames) return [];
     const pas = (h.pas_min || 10) * 60000, ms0 = nowcMs(clau);
@@ -646,7 +660,7 @@ function initMap(){
     return cap;
   }
   function nowcGraf(c, clau){
-    const S = nowcSerie(c, clau), ms0 = nowcMs(clau);
+    const S = nowcSeriePista(c) || nowcSerie(c, clau), ms0 = nowcMs(clau);
     if (S.length < 2) return '<div style="margin-top:8px;font-size:11px;opacity:.7;">Encara no hi ha prou historial per dibuixar l\'evolució.</div>';
     const W = 300, H = 150, L_ = 30, R_ = 32, T_ = 10, B_ = 22, pw = W - L_ - R_, ph = H - T_ - B_;
     const nice = v => { const e = Math.pow(10, Math.floor(Math.log10(v || 1))), m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e; };
@@ -690,7 +704,7 @@ function initMap(){
       const cy = (c.s + c.n) / 2, cx = (c.w + c.e) / 2;
       let best = null, bd = 1e9;
       fr.forEach(r => { const d = Math.hypot(r[1] - cy, r[2] - cx); if (d < bd){ bd = d; best = r; } });
-      if (best && bd < 0.1) c.mov = { vel: best[3], rumb: best[4] };
+      if (best && bd < 0.1) c.mov = { vel: best[3], rumb: best[4], id: best[0] };
     });
     return cels;
   }
