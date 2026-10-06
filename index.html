@@ -1160,11 +1160,13 @@ function initMap(){
     x.dataset.mode = clauL;
     const t = document.getElementById('lx-title'), b = document.getElementById('lx-body'), c = document.getElementById('lx-credit'), h = document.getElementById('lx-hover');
     if (h){ h.textContent = LX_TXT0; h.style.display = (m === 'refl' || m === 'mod') ? '' : 'none'; }
+    lg.style.width = '';
     if (m === 'mod'){
       const P = modPaleta(), M = mod.models[modK()] || {};
       t.innerHTML = (M.nom || 'Model') + (mod.sel.endsWith(':h') ? ' · pluja horària <span style="text-transform:none">(mm/h)</span>' : ' · pluja acumulada <span style="text-transform:none">(mm)</span>');
-      b.innerHTML = '<div class="bands">' + P.map(([v, col]) => `<span style="background:${col}" title="≥ ${v}"></span>`).join('') + '</div>' +
-        '<div class="band-labels">' + P.map(([v, col], i) => i < P.length - 1 ? `<span style="left:${((i + 1) / P.length * 100).toFixed(2)}%">${P[i + 1][0]}</span>` : '').join('') + '</div>';
+      lg.style.width = '360px';
+      const nb = P.length + 1, lab = (par) => '<div class="band-labels" style="height:12px;margin:0">' + P.map(([v], i) => i % 2 === par ? `<span style="left:${((i + 1) / nb * 100).toFixed(2)}%">${v}</span>` : '').join('') + '</div>';
+      b.innerHTML = lab(0) + '<div class="bands" style="margin:1px 0;box-shadow:0 0 0 1px rgba(0,0,0,.25)">' + [MOD_ZERO].concat(P.map(q => q[1])).map(col => `<span style="background:${col}"></span>`).join('') + '</div>' + lab(1);
       c.textContent = 'Model: ' + (M.nom || '') + (M.model === 'arome' ? ' (Météo-France)' : ' (SMC)');
       if (h) h.style.display = '';
     }else if (m === 'refl'){
@@ -1258,10 +1260,10 @@ function initMap(){
   // ---- Previsió: pluja horària i acumulada dels models (WRF-SMC, AROME) a partir de data/models/<model>/ ----
   // precip_h.png és un sprite amb un pas horari per tile; cada píxel codifica la pluja horària en 16 bits (R alt, G baix; 65535 = sense dada).
   // L'acumulat (des de l'inici o en finestres de 3-24 h) se suma aquí, sobre els passos horaris.
-  const MOD_PAL_H = [[0.1, 'rgb(170,215,255)'], [0.5, 'rgb(90,170,255)'], [1, 'rgb(0,150,230)'], [2, 'rgb(0,190,110)'], [4, 'rgb(140,210,0)'], [7, 'rgb(255,235,0)'],
-    [10, 'rgb(255,165,0)'], [20, 'rgb(240,60,20)'], [40, 'rgb(170,0,40)'], [70, 'rgb(200,0,170)'], [100, 'rgb(130,60,210)']];
-  const MOD_PAL_A = [[0.1, 'rgb(170,215,255)'], [1, 'rgb(90,170,255)'], [2, 'rgb(0,150,230)'], [5, 'rgb(0,190,110)'], [10, 'rgb(140,210,0)'], [20, 'rgb(255,235,0)'],
-    [30, 'rgb(255,165,0)'], [50, 'rgb(240,60,20)'], [75, 'rgb(170,0,40)'], [100, 'rgb(200,0,170)'], [150, 'rgb(130,60,210)']];
+  // Paletes i llindars calcats de l'escala de Meteologix (Precipitation 1h / Accumulated total precipitation). Per sota del primer llindar: sense color (gris clar a la llegenda).
+  const MOD_PAL_H = [[0.1, 'rgb(180,215,255)'], [0.2, 'rgb(117,186,255)'], [0.5, 'rgb(53,154,255)'], [1, 'rgb(4,130,255)'], [2, 'rgb(0,105,210)'], [3, 'rgb(0,54,127)'], [4, 'rgb(20,143,27)'], [5, 'rgb(26,207,5)'], [6, 'rgb(99,237,7)'], [7, 'rgb(255,244,43)'], [8, 'rgb(232,220,0)'], [9, 'rgb(240,96,0)'], [10, 'rgb(255,127,39)'], [12, 'rgb(255,166,106)'], [14, 'rgb(248,78,120)'], [16, 'rgb(247,30,84)'], [20, 'rgb(191,0,0)'], [24, 'rgb(136,0,0)'], [30, 'rgb(100,0,127)'], [40, 'rgb(194,0,251)'], [50, 'rgb(221,102,255)'], [60, 'rgb(235,166,255)'], [80, 'rgb(249,230,255)'], [100, 'rgb(212,212,212)'], [125, 'rgb(150,150,150)']];
+  const MOD_PAL_A = [[0.1, 'rgb(222,222,242)'], [1, 'rgb(180,215,255)'], [2, 'rgb(117,186,255)'], [3, 'rgb(53,154,255)'], [5, 'rgb(4,130,255)'], [7, 'rgb(0,105,210)'], [10, 'rgb(0,54,127)'], [15, 'rgb(20,143,27)'], [20, 'rgb(26,207,5)'], [25, 'rgb(99,237,7)'], [30, 'rgb(255,244,43)'], [40, 'rgb(232,220,0)'], [50, 'rgb(240,96,0)'], [60, 'rgb(255,127,39)'], [70, 'rgb(255,166,106)'], [80, 'rgb(248,78,120)'], [90, 'rgb(247,30,84)'], [100, 'rgb(191,0,0)'], [125, 'rgb(136,0,0)'], [150, 'rgb(100,0,127)'], [175, 'rgb(194,0,251)'], [200, 'rgb(221,102,255)'], [250, 'rgb(235,166,255)'], [300, 'rgb(249,230,255)'], [400, 'rgb(212,212,212)'], [500, 'rgb(150,150,150)']];
+  const MOD_ZERO = 'rgb(240,240,240)';
   const modK = () => mod.sel ? mod.sel.split(':')[1] : null;
   const modPaleta = () => (mod.sel && mod.sel.endsWith(':h')) ? MOD_PAL_H : MOD_PAL_A;
   const modMs = M => Date.parse(M.run_utc);
@@ -1655,7 +1657,7 @@ function initMap(){
       if (modOn){
         const P = modPaleta(), hor = mod.sel.endsWith(':h');
         blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, `${MM.nom.toUpperCase()} · ${hor ? 'PLUJA HORÀRIA (mm/h)' : 'PLUJA ACUMULADA' + (mod.acum ? ' ' + mod.acum + ' h' : ' DES DE L\'INICI') + ' (mm)'}`,
-          P.map(q => q[1]), P.map((q, i) => i < P.length - 1 ? String(P[i + 1][0]) : ''), 'frontera') });
+          [MOD_ZERO].concat(P.map(q => q[1])), P.map(q => String(q[0])), 'alterna') });
       }
       blocs.push({ w: 2.4, f: (x, y, w) => {
         ctx.fillStyle = '#52606d'; ctx.font = `600 ${9.5 * u}px ${EXP_FONT}`; ctx.textBaseline = 'middle'; ctx.fillText(modOn ? 'PREVISIÓ VÀLIDA' : 'DATA I HORA', x, y + 5 * u);
@@ -1694,12 +1696,14 @@ function initMap(){
   }
   // Barra de colors amb etiquetes (a la frontera entre bandes o al centre de cada banda)
   function expLlegBandes(ctx, u, x, y, w, titol, cols, lbl, mode){
+    const alt = mode === 'alterna';
     ctx.fillStyle = '#52606d'; ctx.font = `600 ${9.5 * u}px ${EXP_FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(titol, x, y + 5 * u);
-    const bw = w / cols.length, by = y + 13 * u;
-    cols.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(x + i * bw, by, bw + 0.5, 11 * u); });
-    ctx.fillStyle = '#243b53'; ctx.font = `400 ${9.5 * u}px ${EXP_MONO}`; ctx.textAlign = 'center';
-    lbl.forEach((t, i) => { if (t) ctx.fillText(t, x + (mode === 'centre' ? (i + 0.5) : (i + 1)) * bw, by + 17 * u); });
+    ctx.fillText(titol, x, y + (alt ? 3 : 5) * u);
+    const bw = w / cols.length, by = y + (alt ? 18 : 13) * u, bh = (alt ? 9 : 11) * u;
+    cols.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(x + i * bw, by, bw + 0.5, bh); });
+    if (alt){ ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = Math.max(1, u * 0.3); ctx.strokeRect(x, by, w, bh); }
+    ctx.fillStyle = '#243b53'; ctx.font = `400 ${(alt ? 8.5 : 9.5) * u}px ${EXP_MONO}`; ctx.textAlign = 'center';
+    lbl.forEach((t, i) => { if (t) ctx.fillText(t, x + (mode === 'centre' ? (i + 0.5) : (i + 1)) * bw, alt ? (i % 2 === 0 ? by - 4.8 * u : by + bh + 5.5 * u) : by + 17 * u); });
     ctx.textAlign = 'left';
   }
   // ---- fi Tempestes enganxades ----
