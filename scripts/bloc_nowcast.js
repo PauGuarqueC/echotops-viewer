@@ -4,7 +4,8 @@
   // Els avisos fixos amb so surten només per a les cel·les noves de l'últim fotograma (no en recórrer l'historial).
   const nowc = { hist: null, ultim: null, marcs: L.layerGroup(), actiu: true, timer: null, ts: null, vistos: [], so: true, audio: null, pendent: 0,
     mov: null, movActiu: false, movCapa: L.layerGroup() };
-  const refl = { overlay: null, actiu: false };
+  const refl = { overlay: null, actiu: false, mode: 'echo' };
+  const CAPA_MODES = { 'echo': [false, false], 'refl': [true, false], 'sat': [false, true], 'echo+sat': [false, true], 'refl+sat': [true, true] };
   const sat = { actiu: false, op: 65, capa: null, time: null, errs: 0 };
   const REFL_LLEGENDA = [['rgb(150,215,255)', '15'], ['rgb(70,160,255)', '20'], ['rgb(0,190,220)', '25'], ['rgb(0,190,80)', '30'],
     ['rgb(170,215,0)', '35'], ['rgb(255,235,0)', '40'], ['rgb(255,150,0)', '45'], ['rgb(240,40,20)', '50'],
@@ -13,7 +14,7 @@
   const NOWC_NOM = { 1: 'Vigilància', 2: 'Atenció', 3: 'Alerta' };
   const NOWC_COLS = ['nivell', 'lat', 'lon', 'area_km2', 'enganxada_min', 'classe_max', 'mm_mitjana', 'mm_max', 'mm_h_ara', 's', 'w', 'n', 'e', 'dist_costa_km'];
   const NOWC_DBZ = { 6: '35–40', 7: '40–45', 8: '45–50', 9: '50–55', 10: '55–60', 11: '60–65', 12: '> 65' };
-  const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1', NOWC_LS_MOV = 'nowcast_mov_v1', NOWC_LS_SAT = 'nowcast_sat_v1';
+  const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1', NOWC_LS_MOV = 'nowcast_mov_v1', NOWC_LS_SAT = 'nowcast_sat_v1', NOWC_LS_CAPA = 'nowcast_capa_v1';
   const nowcOberts = [];   // avisos que continuen oberts: [{id, c, horaTxt}] (es conserven en recarregar la pàgina)
   const nowcDesaOberts = () => { try{ localStorage.setItem(NOWC_LS_OB, JSON.stringify(nowcOberts)); }catch(e){} };
 
@@ -45,6 +46,7 @@
       .nowc-pop-v{ font-size:18px; font-weight:700; line-height:1.2; }
       .nowc-pop-v span{ font-size:12px; font-weight:500; opacity:.65; }
       .nowc-pop-s{ font-size:11.5px; opacity:.65; margin-top:2px; }
+      .nowc-sec{ font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; opacity:.65; }
       .nowc-ctl{ width:230px; color:var(--text); font-size:12px; }
       .nowc-ctl .nowc-cap{ display:none; cursor:pointer; font-weight:600; align-items:center; justify-content:space-between; gap:8px; }
       @media (max-width:640px){
@@ -205,31 +207,35 @@
     onAdd: function(){
       const div = L.DomUtil.create('div', 'basemap-control');
       div.className += ' nowc-ctl';
-      div.innerHTML = `<div class="nowc-cap"><span>Tempestes enganxades</span><span class="nowc-fl">▾</span></div><div class="nowc-body">
-        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;">
+      div.innerHTML = `<div class="nowc-cap"><span>Capes</span><span class="nowc-fl">▾</span></div><div class="nowc-body">
+        <div class="nowc-sec">Imatge de fons</div>
+        <select id="capa-sel" style="width:100%;margin-top:3px;">
+          <option value="echo">Echotops (Meteocat)</option>
+          <option value="refl">Reflectivitat radar (AEMET)</option>
+          <option value="sat">Satèl·lit IR 10,5 µm (MTG)</option>
+          <option value="echo+sat">Echotops + satèl·lit</option>
+          <option value="refl+sat">Reflectivitat + satèl·lit</option>
+        </select>
+        <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
+        <div id="sat-ctl" style="display:none;margin-top:4px;">
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;opacity:.85;"><span>Opacitat satèl·lit</span>
+            <input type="range" id="sat-op" min="20" max="100" step="5" style="flex:1;margin:0;min-width:0;" title="Opacitat del satèl·lit"></div>
+          <div id="sat-info" style="margin-top:2px;font-size:11px;line-height:1.4;opacity:.9;"></div>
+          <img id="sat-leg" alt="" style="display:block;max-width:100%;margin-top:4px;" onerror="this.style.display='none'">
+        </div>
+        <div class="nowc-sec" style="margin-top:10px;border-top:1px solid var(--panel-border);padding-top:8px;">Superposicions</div>
+        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:3px;">
           <input type="checkbox" id="nowc-toggle" checked style="margin-top:2px"> <span><b>Tempestes enganxades</b> (radar AEMET)</span>
         </label>
         <div id="nowc-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
-        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="nowc-so"> <span>So d'avís</span>
-          <a href="#" id="nowc-prova" style="margin-left:auto;font-size:11px;">prova</a>
-        </label>
-        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
-          <input type="checkbox" id="refl-toggle" style="margin-top:2px"> <span>Reflectivitat radar (AEMET) <i style="opacity:.7">— substitueix els echotops</i></span>
-        </label>
-        <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
-        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
+        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
           <input type="checkbox" id="mov-toggle" style="margin-top:2px"> <span>Moviment (rastre i velocitat)</span>
         </label>
         <div id="mov-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
-        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
-          <input type="checkbox" id="sat-toggle" style="margin-top:2px"> <span>Satèl·lit IR 10,5 µm (MTG)</span>
-        </label>
-        <div id="sat-ctl" style="display:none;margin-top:4px;">
-          <input type="range" id="sat-op" min="20" max="100" step="5" style="width:100%;margin:0;" title="Opacitat">
-          <div id="sat-info" style="margin-top:2px;font-size:11px;line-height:1.4;opacity:.9;"></div>
-          <img id="sat-leg" alt="" style="display:block;max-width:100%;margin-top:4px;" onerror="this.style.display='none'">
-        </div></div>`;
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;">
+          <input type="checkbox" id="nowc-so"> <span>So d'avís</span>
+          <a href="#" id="nowc-prova" style="margin-left:auto;font-size:11px;">prova</a>
+        </label></div>`;
       const cap = div.querySelector('.nowc-cap');
       const fl = div.querySelector('.nowc-fl');
       const plega = c => { div.classList.toggle('col', c); fl.textContent = c ? '▴' : '▾'; nowcAjustaMobil(); };
@@ -238,18 +244,21 @@
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
       div.querySelector('#nowc-toggle').addEventListener('change', e => nowcActiva(e.target.checked));
-      const st_ = div.querySelector('#sat-toggle'), so_ = div.querySelector('#sat-op');
-      let satCfg = { actiu: false, op: 65 };
-      try{ Object.assign(satCfg, JSON.parse(localStorage.getItem(NOWC_LS_SAT) || '{}')); }catch(_){}
-      sat.actiu = !!satCfg.actiu; sat.op = +satCfg.op || 65;
-      st_.checked = sat.actiu; so_.value = sat.op;
-      const desaSat = () => { try{ localStorage.setItem(NOWC_LS_SAT, JSON.stringify({ actiu: sat.actiu, op: sat.op })); }catch(_){} };
-      st_.addEventListener('change', e => { sat.actiu = e.target.checked; desaSat(); satMostra(); });
-      so_.addEventListener('input', e => { sat.op = +e.target.value; desaSat(); if (sat.capa) sat.capa.setOpacity(sat.op / 100); });
+      const cs = div.querySelector('#capa-sel'), so_ = div.querySelector('#sat-op');
+      try{ const m = localStorage.getItem(NOWC_LS_CAPA); if (m && CAPA_MODES[m]) refl.mode = m; }catch(_){}
+      try{ const o = +(JSON.parse(localStorage.getItem(NOWC_LS_SAT) || '{}').op); if (o >= 20 && o <= 100) sat.op = o; }catch(_){}
+      cs.value = refl.mode; so_.value = sat.op;
+      const capaAplica = () => { [refl.actiu, sat.actiu] = CAPA_MODES[refl.mode]; };
+      capaAplica();
+      cs.addEventListener('change', e => {
+        refl.mode = e.target.value; capaAplica();
+        try{ localStorage.setItem(NOWC_LS_CAPA, refl.mode); }catch(_){}
+        reflMostra(); satMostra();
+      });
+      so_.addEventListener('input', e => { sat.op = +e.target.value; try{ localStorage.setItem(NOWC_LS_SAT, JSON.stringify({ op: sat.op })); }catch(_){} if (sat.capa) sat.capa.setOpacity(sat.op / 100); });
       const mt = div.querySelector('#mov-toggle');
       mt.checked = nowc.movActiu;
       mt.addEventListener('change', e => { nowc.movActiu = e.target.checked; try{ localStorage.setItem(NOWC_LS_MOV, nowc.movActiu ? '1' : '0'); }catch(_){} nowcMovMostra(); });
-      div.querySelector('#refl-toggle').addEventListener('change', e => { refl.actiu = e.target.checked; reflMostra(); });
       const so = div.querySelector('#nowc-so');
       so.checked = nowc.so;
       so.addEventListener('change', e => { nowc.so = e.target.checked; try{ localStorage.setItem(NOWC_LS_SO, nowc.so ? '1' : '0'); }catch(_){} });
@@ -490,7 +499,7 @@
   // Imatge de reflectivitat (data/nowcast/refl/YYYYMMDDHHMM.png) de l'instant més proper al de l'scrubber
   // Echotops i reflectivitat són excloents: amb la reflectivitat visible s'amaga la capa d'echotops i la seva llegenda
   function reflExcl(){
-    const on = !!refl.overlay;
+    const on = !!refl.overlay || refl.mode === 'sat';
     if (typeof currentOverlay !== 'undefined' && currentOverlay) currentOverlay.setOpacity(on ? 0 : 0.85);
     const lg = document.getElementById('legend');
     if (lg) lg.style.display = on ? 'none' : '';
