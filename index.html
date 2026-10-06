@@ -1422,21 +1422,29 @@ function initMap(){
   setInterval(modRefresca, 15 * 60 * 1000);
 
   // ---- Contorns i noms a les exportacions (imatge i GIF), no al visor ----
-  // Els límits de comarques (WMS de l'ICGC; si no respon, data/comarques.geojson) es dibuixen en blanc per sobre de les capes de dades. Sense noms.
-  // Límits de comarques de l'ICGC (WMS, PNG transparent). Es demana una sola imatge per a tota l'àrea exportada, i es pinta de blanc.
-  const LIM_WMS = 'https://geoserveis.icgc.cat/servei/catalunya/divisions-administratives/wms';
-  const LIM_CAPES = ['1000000', '500000', '250000', '100000', '50000', '5000'].map(n => 'divisions_administratives_comarques_' + n).join(',');
-  async function limWms(nw, se, W, H){
-    const a = L.CRS.EPSG3857.project(nw), b = L.CRS.EPSG3857.project(se);
-    const bbox = [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)].map(v => v.toFixed(2)).join(',');
-    const url = `${LIM_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${LIM_CAPES}&STYLES=&CRS=EPSG:3857&BBOX=${bbox}&WIDTH=${W}&HEIGHT=${H}&FORMAT=image/png&TRANSPARENT=TRUE`;
-    return await expImg(url);
-  }
-  function limDibuixaWms(ctx, im, W, H){
-    const t = document.createElement('canvas'); t.width = W; t.height = H;
-    const g = t.getContext('2d'); g.drawImage(im, 0, 0, W, H);
-    g.globalCompositeOperation = 'source-in'; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);   // tot blanc, es conserva només l'alfa de la línia
-    ctx.globalAlpha = 0.85; ctx.drawImage(t, 0, 0); ctx.globalAlpha = 1;
+  // Els límits (extrets de la capa ICGC del mapa de fons; si no és possible, data/comarques.geojson) es dibuixen en blanc per sobre de les capes de dades. Sense noms.
+  // Límits (tots: països, regions, comarques) extrets de la capa de mapa de fons "administratiu" de l'ICGC: les línies hi són blanques
+  // sobre gris. Es dibuixen les tessel·les en un llenç apart, es conserva només el blanc (com a alfa) i s'enganxa per sobre de les dades.
+  async function limIcgc(ctx, nw, se, org, Zf, W, H){
+    const l = (typeof baseLayers !== 'undefined') ? baseLayers.icgc : null; if (!l) return false;
+    try{
+      const t = document.createElement('canvas'); t.width = W; t.height = H;
+      const g = t.getContext('2d', { willReadFrequently: true });
+      const tam = (l.options.tileSize && l.options.tileSize.x) || l.options.tileSize || 256, zt = Math.min(l.options.maxZoom || 18, Math.round(Zf)), sc = Math.pow(2, Zf - zt);
+      const r = await expTessel(g, { tam, zt, nw, se, alpha: 1, prog: () => {},
+        url: (x, y) => { const tz = l._tileZoom; l._tileZoom = zt; try{ return l.getTileUrl({ x, y, z: zt }); } finally { l._tileZoom = tz; } },
+        rect: (x, y) => [x * tam * sc - org.x, y * tam * sc - org.y, tam * sc, tam * sc] });
+      if (!r.total || r.fallats > r.total * 0.3) return false;
+      const im = g.getImageData(0, 0, W, H), d = im.data;
+      for (let i = 0; i < d.length; i += 4){
+        const lum = (d[i] + d[i + 1] + d[i + 2]) / 3, mn = Math.min(d[i], d[i + 1], d[i + 2]);
+        const a = Math.max(0, Math.min(1, (Math.min(lum, mn + 6) - 232) / 20));                   // només píxels molt clars i neutres (línies blanques)
+        d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = Math.round(a * 255);
+      }
+      g.putImageData(im, 0, 0);
+      ctx.globalAlpha = 0.85; ctx.drawImage(t, 0, 0); ctx.globalAlpha = 1;
+      return true;
+    }catch(e){ console.warn('límits ICGC', e); return false; }
   }
   async function limCarrega(){
     if (lim.com !== undefined || lim.carregant) return;
@@ -1706,9 +1714,8 @@ function initMap(){
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
       }
       if (!opt.senseLimits){
-        const wi = await limWms(nw, se, MW, MH);
-        if (wi) limDibuixaWms(ctx, wi, MW, MH);
-        else { await limCarrega(); expLimits(ctx, P, k); }                        // si el WMS no respon: comarques.geojson
+        const ok = await limIcgc(ctx, nw, se, org, Zf, MW, MH);
+        if (!ok){ await limCarrega(); expLimits(ctx, P, k); }                    // si no és possible: comarques.geojson
       }
       expVectors(ctx, P, k);
       ctx.restore();
