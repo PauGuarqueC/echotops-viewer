@@ -613,6 +613,72 @@ function initMap(){
       f('Reflectivitat màxima:', `${NOWC_DBZ[c.classe_max] || '> 35'} dBZ`) +
       (c.mov ? f('Moviment:', nowcMovTxt(c.mov.vel, c.mov.rumb)) : '');
   }
+
+  // ---- Evolució de la tempesta: intensitat (línia, mm/h) i acumulació (barres, mm) al llarg del temps ----
+  // L'historial no porta identificador de cel·la: se segueix pel fotograma veí més proper amb una durada d'aturada coherent.
+  function nowcSerie(c, clau){
+    const h = nowc.hist; if (!h || !h.fotogrames) return [];
+    const pas = (h.pas_min || 10) * 60000, ms0 = nowcMs(clau);
+    const cols = Object.fromEntries(h.columnes.map((n, i) => [n, i]));
+    const obj = f => Object.fromEntries(h.columnes.map((n, i) => [n, f[i]]));
+    const cen = r => [(r.s + r.n) / 2, (r.w + r.e) / 2];
+    const veina = (r, ms, dir) => {
+      const [cy, cx] = cen(r);
+      for (let k = 1; k <= 3; k++){
+        const fr = h.fotogrames[nowcClau(ms + dir * k * pas)];
+        if (!fr) continue;
+        let best = null, bd = 0.2;
+        fr.forEach(f => {
+          const q = obj(f), d = Math.hypot(cen(q)[0] - cy, cen(q)[1] - cx), dt = (q.enganxada_min - r.enganxada_min) * dir;
+          if (dt > 0 && dt <= 50 && d < bd){ bd = d; best = q; }
+        });
+        if (best) return { r: best, ms: ms + dir * k * pas };
+      }
+      return null;
+    };
+    const pt = (r, ms) => ({ ms, mmh: r.mm_h_ara, acum: r.mm_mitjana });
+    const cap = [pt(c, ms0)];
+    for (let r = c, ms = ms0, n = 0; n < 60; n++){ const v = veina(r, ms, -1); if (!v) break; cap.unshift(pt(v.r, v.ms)); r = v.r; ms = v.ms; }
+    for (let r = c, ms = ms0, n = 0; n < 60; n++){ const v = veina(r, ms, +1); if (!v) break; cap.push(pt(v.r, v.ms)); r = v.r; ms = v.ms; }
+    return cap;
+  }
+  function nowcGraf(c, clau){
+    const S = nowcSerie(c, clau), ms0 = nowcMs(clau);
+    if (S.length < 2) return '<div style="margin-top:8px;font-size:11px;opacity:.7;">Encara no hi ha prou historial per dibuixar l\'evolució.</div>';
+    const W = 300, H = 150, L_ = 30, R_ = 32, T_ = 10, B_ = 22, pw = W - L_ - R_, ph = H - T_ - B_;
+    const nice = v => { const e = Math.pow(10, Math.floor(Math.log10(v || 1))), m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e; };
+    const maxI = nice(Math.max(1, ...S.map(p => p.mmh)) * 1.05), maxA = nice(Math.max(1, ...S.map(p => p.acum)) * 1.05);
+    const t0 = S[0].ms, t1 = S[S.length - 1].ms, dt = Math.max(1, t1 - t0);
+    const X = ms => L_ + (ms - t0) / dt * pw, YI = v => T_ + ph - v / maxI * ph, YA = v => T_ + ph - v / maxA * ph;
+    const bw = Math.max(2, Math.min(12, pw / (S.length) * 0.7));
+    const fmt = v => (v >= 10 || Number.isInteger(v)) ? String(Math.round(v)) : v.toFixed(1);
+    let g = '';
+    for (let i = 0; i <= 4; i++){
+      const y = T_ + ph - i / 4 * ph;
+      g += `<line x1="${L_}" x2="${L_ + pw}" y1="${y}" y2="${y}" stroke="#e3e7eb" stroke-width="1"/>` +
+        `<text x="${L_ - 4}" y="${y + 3}" text-anchor="end" font-size="9" fill="#52606d">${fmt(maxI * i / 4)}</text>` +
+        `<text x="${L_ + pw + 4}" y="${y + 3}" font-size="9" fill="#7b8794">${fmt(maxA * i / 4)}</text>`;
+    }
+    const barres = S.map(p => `<rect x="${(X(p.ms) - bw / 2).toFixed(1)}" y="${YA(p.acum).toFixed(1)}" width="${bw.toFixed(1)}" height="${(T_ + ph - YA(p.acum)).toFixed(1)}" fill="#b8c4d0"/>`).join('');
+    const linia = S.map((p, i) => `${i ? 'L' : 'M'}${X(p.ms).toFixed(1)},${YI(p.mmh).toFixed(1)}`).join(' ');
+    const punts = S.map(p => `<circle cx="${X(p.ms).toFixed(1)}" cy="${YI(p.mmh).toFixed(1)}" r="2" fill="#fff" stroke="#1f2933" stroke-width="1.2"/>`).join('');
+    const tick = n => Math.min(n, S.length);
+    let eixX = '';
+    const nt = Math.min(4, S.length - 1);
+    for (let i = 0; i <= nt; i++){
+      const ms = t0 + dt * i / nt;
+      eixX += `<text x="${X(ms).toFixed(1)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === nt ? 'end' : 'middle'}" font-size="9" fill="#52606d">${nowcHoraLocal(Math.round(ms / 600000) * 600000)}</text>`;
+    }
+    const ara = (ms0 >= t0 && ms0 <= t1) ? `<line x1="${X(ms0).toFixed(1)}" x2="${X(ms0).toFixed(1)}" y1="${T_}" y2="${T_ + ph}" stroke="#C8102E" stroke-width="1" stroke-dasharray="3 3"/>` : '';
+    const hit = S.map(p => `<rect x="${(X(p.ms) - pw / S.length / 2).toFixed(1)}" y="${T_}" width="${(pw / S.length).toFixed(1)}" height="${ph}" fill="transparent"><title>${nowcHoraLocal(p.ms)} · ${p.mmh} mm/h · ${p.acum} mm acumulats</title></rect>`).join('');
+    return `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--panel-border);">` +
+      `<div style="display:flex;justify-content:space-between;font-size:10px;color:#52606d;margin-bottom:2px;"><span>mm/h</span><span>mm acumulats</span></div>` +
+      `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;max-width:${W}px;font-family:inherit;">${g}${barres}<path d="${linia}" fill="none" stroke="#1f2933" stroke-width="1.6" stroke-linejoin="round"/>${punts}${ara}` +
+      `<line x1="${L_}" x2="${L_ + pw}" y1="${T_ + ph}" y2="${T_ + ph}" stroke="#9aa5b1"/>${eixX}${hit}</svg>` +
+      `<div style="display:flex;gap:12px;font-size:10px;color:#52606d;margin-top:2px;"><span><span style="display:inline-block;width:14px;height:2px;background:#1f2933;vertical-align:middle"></span> Intensitat</span>` +
+      `<span><span style="display:inline-block;width:9px;height:9px;background:#b8c4d0;vertical-align:middle"></span> Acumulació</span>` +
+      (ara ? `<span><span style="display:inline-block;width:14px;border-top:1px dashed #C8102E;vertical-align:middle"></span> Ara</span>` : '') + `</div></div>`;
+  }
   // Adjunta a cada cel·la el moviment de la pista més propera del mateix fotograma
   function nowcAdjuntaMov(cels, clau){
     const fr = nowc.mov && nowc.mov.frames && nowc.mov.frames[clau];
@@ -991,7 +1057,7 @@ function initMap(){
       const m = L.circleMarker(centre, { radius: mar ? 6 : 7 + c.nivell * 2, color: '#fff', weight: 2, fillColor: col, fillOpacity: mar ? 0.7 : 0.95 });
       m.on('click', () => {
         if (typeof pickingCenter !== 'undefined' && pickingCenter) return;
-        L.popup({ maxWidth: 300 }).setLatLng(centre).setContent(nowcHtml(c, hora(clau), esUltim)).openOn(map);
+        L.popup({ maxWidth: 320, minWidth: Math.min(300, window.innerWidth - 60) }).setLatLng(centre).setContent(nowcHtml(c, hora(clau), esUltim) + nowcGraf(c, clau)).openOn(map);
       });
       m.addTo(nowc.marcs);
     });
