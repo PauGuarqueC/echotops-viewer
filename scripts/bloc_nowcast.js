@@ -5,6 +5,7 @@
   const nowc = { hist: null, ultim: null, marcs: L.layerGroup(), actiu: true, timer: null, ts: null, vistos: [], so: true, audio: null, pendent: 0,
     mov: null, movActiu: false, movCapa: L.layerGroup() };
   const refl = { overlay: null, actiu: false };
+  const sat = { actiu: false, op: 65, capa: null, time: null, errs: 0 };
   const REFL_LLEGENDA = [['rgb(150,215,255)', '15'], ['rgb(70,160,255)', '20'], ['rgb(0,190,220)', '25'], ['rgb(0,190,80)', '30'],
     ['rgb(170,215,0)', '35'], ['rgb(255,235,0)', '40'], ['rgb(255,150,0)', '45'], ['rgb(240,40,20)', '50'],
     ['rgb(170,0,30)', '55'], ['rgb(210,0,170)', '60'], ['rgb(150,60,220)', '65']];
@@ -12,7 +13,7 @@
   const NOWC_NOM = { 1: 'Vigilància', 2: 'Atenció', 3: 'Alerta' };
   const NOWC_COLS = ['nivell', 'lat', 'lon', 'area_km2', 'enganxada_min', 'classe_max', 'mm_mitjana', 'mm_max', 'mm_h_ara', 's', 'w', 'n', 'e', 'dist_costa_km'];
   const NOWC_DBZ = { 6: '35–40', 7: '40–45', 8: '45–50', 9: '50–55', 10: '55–60', 11: '60–65', 12: '> 65' };
-  const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1', NOWC_LS_MOV = 'nowcast_mov_v1';
+  const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1', NOWC_LS_MOV = 'nowcast_mov_v1', NOWC_LS_SAT = 'nowcast_sat_v1';
   const nowcOberts = [];   // avisos que continuen oberts: [{id, c, horaTxt}] (es conserven en recarregar la pàgina)
   const nowcDesaOberts = () => { try{ localStorage.setItem(NOWC_LS_OB, JSON.stringify(nowcOberts)); }catch(e){} };
 
@@ -220,7 +221,15 @@
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
           <input type="checkbox" id="mov-toggle" style="margin-top:2px"> <span>Moviment (rastre i velocitat)</span>
         </label>
-        <div id="mov-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div></div>`;
+        <div id="mov-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
+        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
+          <input type="checkbox" id="sat-toggle" style="margin-top:2px"> <span>Satèl·lit IR 10,5 µm (MTG)</span>
+        </label>
+        <div id="sat-ctl" style="display:none;margin-top:4px;">
+          <input type="range" id="sat-op" min="20" max="100" step="5" style="width:100%;margin:0;" title="Opacitat">
+          <div id="sat-info" style="margin-top:2px;font-size:11px;line-height:1.4;opacity:.9;"></div>
+          <img id="sat-leg" alt="" style="display:block;max-width:100%;margin-top:4px;" onerror="this.style.display='none'">
+        </div></div>`;
       const cap = div.querySelector('.nowc-cap');
       const fl = div.querySelector('.nowc-fl');
       const plega = c => { div.classList.toggle('col', c); fl.textContent = c ? '▴' : '▾'; nowcAjustaMobil(); };
@@ -229,6 +238,14 @@
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
       div.querySelector('#nowc-toggle').addEventListener('change', e => nowcActiva(e.target.checked));
+      const st_ = div.querySelector('#sat-toggle'), so_ = div.querySelector('#sat-op');
+      let satCfg = { actiu: false, op: 65 };
+      try{ Object.assign(satCfg, JSON.parse(localStorage.getItem(NOWC_LS_SAT) || '{}')); }catch(_){}
+      sat.actiu = !!satCfg.actiu; sat.op = +satCfg.op || 65;
+      st_.checked = sat.actiu; so_.value = sat.op;
+      const desaSat = () => { try{ localStorage.setItem(NOWC_LS_SAT, JSON.stringify({ actiu: sat.actiu, op: sat.op })); }catch(_){} };
+      st_.addEventListener('change', e => { sat.actiu = e.target.checked; desaSat(); satMostra(); });
+      so_.addEventListener('input', e => { sat.op = +e.target.value; desaSat(); if (sat.capa) sat.capa.setOpacity(sat.op / 100); });
       const mt = div.querySelector('#mov-toggle');
       mt.checked = nowc.movActiu;
       mt.addEventListener('change', e => { nowc.movActiu = e.target.checked; try{ localStorage.setItem(NOWC_LS_MOV, nowc.movActiu ? '1' : '0'); }catch(_){} nowcMovMostra(); });
@@ -289,6 +306,7 @@
     nowcMostraAvisos();
     nowcMovMostra();
     reflMostra();
+    satMostra();
   }
 
   // Paleta sobria: blanc suau per a les cel·les que es mouen, gris per a les quasi quietes
@@ -377,6 +395,45 @@
     nowc.movCapa.addTo(map);
     const nMou = fr.filter(r => r[3] !== null && r[3] >= 8).length;
     info.innerHTML = `${fr.length} cel·les intenses · ${nMou} en moviment`;
+  }
+
+  // ---- Satèl·lit MTG FCI IR 10,5 µm (EUMETView WMS, sense clau ni cost) ----
+  // El servei només parla EPSG:4326: cada tessel·la (512 px) es demana amb la seva caixa lat/lon. L'instant segueix l'scrubber.
+  const SAT = {
+    url: 'https://view.eumetsat.int/geoserver/ows',
+    capa: 'mtg_fd:ir105_hrfi',
+    estil: 'mtg_fd:mtg_fd_ir105_hrfi_style_01',      // "SLD MTG HRFI IR 10.5 Style - 01"
+  };
+  const SatWMS = L.TileLayer.extend({
+    getTileUrl: function(coords){
+      const b = this._tileCoordsToBounds(coords);
+      const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(x => x.toFixed(5)).join(',');   // WMS 1.3.0 + EPSG:4326: lat,lon
+      const o = this.options;
+      return `${SAT.url}?service=WMS&request=GetMap&version=1.3.0&layers=${encodeURIComponent(SAT.capa)}&styles=${encodeURIComponent(SAT.estil)}` +
+        `&format=image/png&transparent=true&crs=EPSG:4326&bbox=${bbox}&width=512&height=512&time=${o.time}`;
+    },
+  });
+  const satTime = ms => { const d = new Date(Math.floor(ms / 600000) * 600000); return d.toISOString().slice(0, 19) + 'Z'; };
+  function satMostra(){
+    const ctl = document.getElementById('sat-ctl'), info = document.getElementById('sat-info'), leg = document.getElementById('sat-leg');
+    if (!ctl) return;
+    ctl.style.display = sat.actiu ? 'block' : 'none';
+    if (!sat.actiu){ if (sat.capa){ map.removeLayer(sat.capa); sat.capa = null; sat.time = null; } return; }
+    if (!map.getPane('sat')){ map.createPane('sat'); const p = map.getPane('sat'); p.style.zIndex = 250; p.style.pointerEvents = 'none'; }
+    const ref = nowc.ts ? nowcMs(nowc.ts.replace('_', '')) : Date.now() - 30 * 60000;
+    const t = satTime(ref);
+    if (!sat.capa){
+      sat.errs = 0;
+      sat.capa = new SatWMS('', { pane: 'sat', tileSize: 512, zoomOffset: -1, opacity: sat.op / 100, time: t, updateWhenIdle: true, keepBuffer: 1, maxNativeZoom: 12 });
+      sat.capa.on('tileerror', () => { if (++sat.errs === 3 && info) info.innerHTML = '<b style="color:#C8102E">No s\'han pogut carregar les imatges de satèl·lit</b>'; });
+      sat.capa.on('tileload', () => { sat.errs = 0; });
+      sat.capa.addTo(map);
+      sat.time = t;
+      if (leg){ leg.style.display = 'block'; leg.src = `${SAT.url}?service=WMS&request=GetLegendGraphic&version=1.3.0&format=image/png&layer=${encodeURIComponent(SAT.capa)}&style=${encodeURIComponent(SAT.estil)}`; }
+    }else if (t !== sat.time){
+      sat.time = t; sat.capa.options.time = t; sat.capa.redraw();
+    }
+    if (info && sat.errs < 3) info.textContent = `MTG de les ${nowcHoraLocal(Date.parse(t))} · una imatge cada 10 min · © EUMETSAT`;
   }
 
   function nowcMostraAvisos(){
