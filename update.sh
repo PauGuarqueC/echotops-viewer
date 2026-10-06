@@ -13,8 +13,8 @@ python3 scripts/build_manifest.py
 rsync -a ~/echotops-data/png/ data/png/
 
 # --- Nowcasting: tempestes enganxades (compost AEMET) ---
-git -C "$HOME/radar-arxiu-javi" fetch --depth 1 origin main && git -C "$HOME/radar-arxiu-javi" reset --hard FETCH_HEAD || echo "nowcast: no s'ha pogut actualitzar l'arxiu" >&2
-python3 scripts/nowcast_export.py --arrel "$HOME/radar-arxiu-javi/data" --sortida data/nowcast || echo "nowcast: error a l'exportació" >&2
+python3 scripts/aemet_compo.py --sortida "$HOME/echotops-data/aemet" || echo "nowcast: no s'ha pogut descarregar el compost" >&2
+python3 scripts/nowcast_export.py --arrel "$HOME/echotops-data/aemet" --sortida data/nowcast || echo "nowcast: error a l'exportació" >&2
 
 git add data/
 if git diff --cached --quiet; then
