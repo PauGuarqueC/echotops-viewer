@@ -627,10 +627,13 @@ function initMap(){
       for (let k = 1; k <= 3; k++){
         const fr = h.fotogrames[nowcClau(ms + dir * k * pas)];
         if (!fr) continue;
-        let best = null, bd = 0.2;
+        let best = null, bs = 1e9;
         fr.forEach(f => {
-          const q = obj(f), d = Math.hypot(cen(q)[0] - cy, cen(q)[1] - cx), dt = (q.enganxada_min - r.enganxada_min) * dir;
-          if (dt > 0 && dt <= 50 && d < bd){ bd = d; best = q; }
+          const q = obj(f), d = Math.hypot(cen(q)[0] - cy, cen(q)[1] - cx);
+          if (d > 0.15) return;
+          // la durada d'aturada no és estrictament monòtona (fusions, recàlculs): només desempata
+          const sc = d + Math.abs((q.enganxada_min - r.enganxada_min) * dir - 10 * k) * 0.001;
+          if (sc < bs){ bs = sc; best = q; }
         });
         if (best) return { r: best, ms: ms + dir * k * pas };
       }
@@ -638,7 +641,7 @@ function initMap(){
     };
     const pt = (r, ms) => ({ ms, mmh: r.mm_h_ara, acum: r.mm_mitjana });
     const cap = [pt(c, ms0)];
-    for (let r = c, ms = ms0, n = 0; n < 60; n++){ const v = veina(r, ms, -1); if (!v) break; cap.unshift(pt(v.r, v.ms)); r = v.r; ms = v.ms; }
+    for (let r = c, ms = ms0, n = 0; n < 60; n++){ const v = veina(r, ms, -1); if (!v || v.ms < ms0 - (c.enganxada_min + 20) * 60000) break; cap.unshift(pt(v.r, v.ms)); r = v.r; ms = v.ms; }
     for (let r = c, ms = ms0, n = 0; n < 60; n++){ const v = veina(r, ms, +1); if (!v) break; cap.push(pt(v.r, v.ms)); r = v.r; ms = v.ms; }
     return cap;
   }
