@@ -1423,6 +1423,7 @@ function initMap(){
   // ---- Exportació d'imatge: l'usuari tria l'àrea i es compon (a alta resolució) amb les capes actives i les seves llegendes ----
   const EXP = { actiu: false, bar: null, caixa: null, ocupat: false, net: null };
   const EXP_FONT = 'Roboto, "Helvetica Neue", Arial, sans-serif', EXP_MONO = '"Roboto Mono", ui-monospace, Menlo, monospace';
+  const EXP_CAT = [[40.40, 0.00], [42.95, 3.45]];             // Tot Catalunya: [[S, O], [N, E]] fix, independent del zoom del visor
   const EXP_LLARG = 3000;                                    // píxels del costat llarg del mapa exportat
   const EXP_ECHO_COLS = ['#0000B3', '#0033FF', '#0080FF', '#00CCFF', '#00FFFF', '#4C7300', '#80B300', '#00CC00', '#FFFF00', '#FFA500', '#FF7F00', '#FF0000', '#FF00FF', '#800080'];
   const EXP_ECHO_LBL = ['1', '2', '3', '4', '5', '6', '7', '8', '10', '12', '14', '16', '20'];
@@ -1467,7 +1468,7 @@ function initMap(){
       '<select id="exp-rang" style="display:none" title="Durada">' + (modo
         ? [6, 12, 24, 48].map(h => `<option value="${h}"${h === 12 ? ' selected' : ''}>Següents ${h} h</option>`).join('')
         : [1, 2, 3, 6].map(h => `<option value="${h}"${h === 3 ? ' selected' : ''}>Últimes ${h} h</option>`).join('')) + '</select>' +
-      '<button data-a="tot">Tot el mapa visible</button><button data-a="no">Cancel·la</button>';
+      '<button data-a="tot">Tot Catalunya</button><button data-a="no">Cancel·la</button>';
     document.body.appendChild(bar); EXP.bar = bar;
     L.DomEvent.disableClickPropagation(bar);
     bar.querySelector('#exp-fmt').addEventListener('change', e => {
@@ -1477,7 +1478,7 @@ function initMap(){
     bar.addEventListener('click', e => {
       const a = e.target.dataset && e.target.dataset.a; if (!a || EXP.ocupat) return;
       if (a === 'no') expAtura();
-      else if (a === 'tot'){ const s = map.getSize(); expGenera(0, 0, s.x, s.y); }
+      else if (a === 'tot'){ const p = map.latLngToContainerPoint(L.latLng(EXP_CAT[1][0], EXP_CAT[0][1])), q = map.latLngToContainerPoint(L.latLng(EXP_CAT[0][0], EXP_CAT[1][1])); expGenera(p.x, p.y, q.x, q.y, true); }
     });
     let ini = null;
     const pt = e => { const r = cont.getBoundingClientRect(); return [Math.min(Math.max(e.clientX - r.left, 0), r.width), Math.min(Math.max(e.clientY - r.top, 0), r.height)]; };
@@ -1605,11 +1606,14 @@ function initMap(){
   async function expCompon(x0, y0, x1, y1, opt){
     opt = opt || {}; const LL = opt.llarg || EXP_LLARG, AMPLE = opt.ample || 1500;
     {
-      const selW = x1 - x0, selH = y1 - y0;
-      const k = Math.min(8, Math.max(1, LL / Math.max(selW, selH)));
+      // "Tot Catalunya": coordenades fixes i mida independent del zoom/enquadrament del visor
+      const cat = !!opt.cat, Z0 = cat ? 8 : map.getZoom();
+      const nw = cat ? L.latLng(EXP_CAT[1][0], EXP_CAT[0][1]) : map.containerPointToLatLng([x0, y0]), se = cat ? L.latLng(EXP_CAT[0][0], EXP_CAT[1][1]) : map.containerPointToLatLng([x1, y1]);
+      const pa = map.project(nw, Z0), pb = map.project(se, Z0);
+      const selW = cat ? pb.x - pa.x : x1 - x0, selH = cat ? pb.y - pa.y : y1 - y0;
+      const k = Math.min(8, LL / Math.max(selW, selH));
       const MW = Math.round(selW * k), MH = Math.round(selH * k);
-      const Zf = map.getZoom() + Math.log2(k);
-      const nw = map.containerPointToLatLng([x0, y0]), se = map.containerPointToLatLng([x1, y1]);
+      const Zf = Z0 + Math.log2(k);
       const org = map.project(nw, Zf);
       const P = ll => { const q = map.project(L.latLng(ll), Zf); return [q.x - org.x, q.y - org.y]; };
 
@@ -1705,14 +1709,14 @@ function initMap(){
     }
   }
 
-  async function expGenera(x0, y0, x1, y1){
+  async function expGenera(x0, y0, x1, y1, cat){
     if (EXP.ocupat) return;
-    EXP.ocupat = true;
+    EXP.ocupat = true; EXP.cat = !!cat;
     if (!EXP.caixa){ EXP.caixa = document.createElement('div'); EXP.caixa.id = 'exp-caixa'; map.getContainer().appendChild(EXP.caixa); }
     Object.assign(EXP.caixa.style, { left: x0 + 'px', top: y0 + 'px', width: (x1 - x0) + 'px', height: (y1 - y0) + 'px' });
     try{
       if (EXP.fmt === 'gif'){ await expGif(x0, y0, x1, y1); return; }
-      const r = await expCompon(x0, y0, x1, y1);
+      const r = await expCompon(x0, y0, x1, y1, { cat: EXP.cat });
       expMissatge('<b>Desant…</b>');
       const blob = await new Promise(res => r.cv.toBlob(res, 'image/png'));
       if (!blob) throw new Error('canvas buit');
@@ -1764,7 +1768,7 @@ function initMap(){
         await frames[i]();
         const sg = sig() + '|' + (modo ? mod.t : '');
         if (sg === prev) continue; prev = sg;
-        const r = await expCompon(x0, y0, x1, y1, { llarg: 1100, ample: 1100, sil: true, prog: () => {} });
+        const r = await expCompon(x0, y0, x1, y1, { llarg: 1100, ample: 1100, sil: true, prog: () => {}, cat: EXP.cat });
         if (!gif) gif = new GIF({ workers: 3, quality: 10, width: r.cv.width, height: r.cv.height, workerScript: wUrl });
         if (last) last.delay = dl;
         last = { delay: dl };
