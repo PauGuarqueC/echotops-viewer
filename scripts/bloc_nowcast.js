@@ -855,12 +855,24 @@
     try{ C = await modCarrega(k); }catch(_){ if (tok === mod.token) info.innerHTML += '<br><b style="color:#C8102E">No s\'ha pogut carregar la previsió</b>'; return; }
     if (tok !== mod.token) return;
     const camp = modCamp(C, s, hor, mod.acum), pal = hor ? MOD_PAL_H : MOD_PAL_A;
-    const cv = document.createElement('canvas'); cv.width = C.W; cv.height = C.H;
-    const g = cv.getContext('2d'), im = g.createImageData(C.W, C.H), cols = pal.map(([v, c]) => [v, ...c.match(/\d+/g).map(Number)]);
-    for (let i = 0; i < camp.length; i++){
-      const v = camp[i]; if (!(v >= cols[0][0])) continue;
-      let q = 0; while (q + 1 < cols.length && v >= cols[q + 1][0]) q++;
-      im.data[i * 4] = cols[q][1]; im.data[i * 4 + 1] = cols[q][2]; im.data[i * 4 + 2] = cols[q][3]; im.data[i * 4 + 3] = 255;
+    // Suavitzat: interpolació bilineal del camp a F× la resolució abans de classificar per colors (isohietes arrodonides en lloc de blocs).
+    const F = 4, CW = C.W * F, CH = C.H * F;
+    const cv = document.createElement('canvas'); cv.width = CW; cv.height = CH;
+    const g = cv.getContext('2d'), im = g.createImageData(CW, CH), cols = pal.map(([v, c]) => [v, ...c.match(/\d+/g).map(Number)]);
+    const W = C.W, H = C.H;
+    for (let Y = 0; Y < CH; Y++){
+      const sy = Math.min(H - 1, Math.max(0, (Y + 0.5) / F - 0.5)), y0 = Math.floor(sy), y1 = Math.min(H - 1, y0 + 1), fy = sy - y0;
+      for (let X = 0; X < CW; X++){
+        const sx = Math.min(W - 1, Math.max(0, (X + 0.5) / F - 0.5)), x0 = Math.floor(sx), x1 = Math.min(W - 1, x0 + 1), fx = sx - x0;
+        const a00 = camp[y0 * W + x0], a10 = camp[y0 * W + x1], a01 = camp[y1 * W + x0], a11 = camp[y1 * W + x1];
+        let v;
+        if (a00 === a00 && a10 === a10 && a01 === a01 && a11 === a11) v = (a00 * (1 - fx) + a10 * fx) * (1 - fy) + (a01 * (1 - fx) + a11 * fx) * fy;
+        else v = camp[(fy < 0.5 ? y0 : y1) * W + (fx < 0.5 ? x0 : x1)];        // vora del domini: veí més proper
+        if (!(v >= cols[0][0])) continue;
+        let q = 0; while (q + 1 < cols.length && v >= cols[q + 1][0]) q++;
+        const o = (Y * CW + X) * 4;
+        im.data[o] = cols[q][1]; im.data[o + 1] = cols[q][2]; im.data[o + 2] = cols[q][3]; im.data[o + 3] = 255;
+      }
     }
     g.putImageData(im, 0, 0);
     mod.cur = { camp, W: C.W, H: C.H, b: M.bounds, hor, n: mod.acum };
