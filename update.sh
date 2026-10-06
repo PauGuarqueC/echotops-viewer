@@ -16,6 +16,9 @@ rsync -a ~/echotops-data/png/ data/png/
 python3 scripts/aemet_compo.py --sortida "$HOME/echotops-data/aemet" || echo "nowcast: no s'ha pogut descarregar el compost" >&2
 python3 scripts/nowcast_export.py --arrel "$HOME/echotops-data/aemet" --sortida data/nowcast || echo "nowcast: error a l'exportació" >&2
 
+# --- Previsió: WRF-SMC (AROME quan tingui precipitació) ---
+python3 scripts/models_export.py --wrf-dir /home/labfire/data/SMC-WRF --arome-dir /home/labfire/data/AROME-CAT --sortida data/models || echo "models: error a l'exportació" >&2
+
 git add data/
 if git diff --cached --quiet; then
   echo "Sense canvis, no cal commit."
