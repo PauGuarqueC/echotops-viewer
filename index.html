@@ -310,7 +310,7 @@
   <div id="timeline-wrap">
     <div id="timeline-panel">
       <div id="timeline-readout">
-        <span class="ts"><span class="date" id="ts-date">--/--/----</span><span id="ts-time">--:--</span> UTC</span>
+        <span class="ts"><span class="date" id="ts-date">--/--/----</span><span id="ts-time">--:--</span><span style="font-size:12px;font-weight:400;color:var(--text-dim);margin-left:6px">hora local</span><span id="ts-utc" style="font-size:12px;font-weight:400;color:var(--text-dim);margin-left:8px">--:-- UTC</span></span>
         <button id="playbtn">▶ REPRODUIR</button>
       </div>
       <input type="range" id="scrubber" min="0" max="0" value="0" step="1" />
@@ -960,9 +960,13 @@ function initMap(){
     const ts = visibleTimestamps[index];
     currentTs = ts;
     if (typeof nowcMostra === 'function') nowcMostra(ts);
-    const { date, time } = fmtTs(ts);
-    tsDate.textContent = date;
-    tsTime.textContent = time;
+    const { time: horaUtc } = fmtTs(ts);
+    // hora de Catalunya (Europe/Madrid), amb horari d'estiu/hivern, sigui quin sigui el fus del navegador
+    const pc = {}; new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(tsToDate(ts)).forEach(x => { pc[x.type] = x.value; });
+    tsDate.textContent = `${pc.day}/${pc.month}/${pc.year}`;
+    tsTime.textContent = `${pc.hour}:${pc.minute}`;
+    const tu = document.getElementById('ts-utc'); if (tu) tu.textContent = `${horaUtc} UTC`;
     scrubber.max = visibleTimestamps.length - 1;
     scrubber.value = index;
 
