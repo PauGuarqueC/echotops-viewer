@@ -2,17 +2,16 @@
 """
 Exporta per al visor les tempestes "enganxades" detectades a l'últim fotograma del compost AEMET.
 
-Escriu a --sortida (p.ex. data/nowcast/):
+Escriu a --sortida (p.ex. data/nowcast/):  (+ historial.json i refl/ amb les imatges de reflectivitat)
   avisos.json   instant de les dades, límits del retall i llista de cel·les amb nivell d'avís
-  avisos.png    contorns de les cel·les (RGBA, ampliat x4) per pintar-los sobre el mapa
 
 Nivells (sobre cel·les amb classe >= --llindar i àrea >= --min-px):
-  1 Vigilància : enganxada >= 40 min
+  1 Vigilància : enganxada >= 30 min
   2 Atenció    : enganxada >= 90 min i ~20 mm o més de mitjana des que s'hi ha parat
   3 Alerta     : enganxada >= 120 min i ~40 mm o més de mitjana
 """
 import argparse, json, shutil
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -21,10 +20,33 @@ from scipy import ndimage
 
 import persist as P
 import nowcast as N
-from persist_export import retalla, BBOX_CAT
+
+# Retall per defecte: Catalunya + marge  (lon_min, lat_min, lon_max, lat_max)
+BBOX_CAT = (-0.3, 40.3, 3.8, 43.1)
+
+
+def retalla(bounds, bbox, shape):
+    """Retorna (r0, r1, c0, c1) i els límits Leaflet [[S,W],[N,E]] del retall, alineats als píxels."""
+    h, w = shape
+    lon0, lat0, lon1, lat1 = bounds["lon_min"], bounds["lat_min"], bounds["lon_max"], bounds["lat_max"]
+    dlon, dlat = (lon1 - lon0) / w, (lat1 - lat0) / h
+    c0 = max(0, int(np.floor((bbox[0] - lon0) / dlon)))
+    c1 = min(w, int(np.ceil((bbox[2] - lon0) / dlon)))
+    r0 = max(0, int(np.floor((lat1 - bbox[3]) / dlat)))
+    r1 = min(h, int(np.ceil((lat1 - bbox[1]) / dlat)))
+    s = lat1 - r1 * dlat
+    n = lat1 - r0 * dlat
+    west = lon0 + c0 * dlon
+    east = lon0 + c1 * dlon
+    return (r0, r1, c0, c1), [[round(s, 5), round(west, 5)], [round(n, 5), round(east, 5)]]
 
 ESCALA = 4   # píxels de PNG per píxel de radar
 COLORS = {1: (255, 200, 0, 255), 2: (255, 120, 0, 255), 3: (230, 20, 40, 255)}
+# Reflectivitat: classe -> RGBA (1 = 5-15 dBZ, 12 = >65 dBZ); 0 i 255 (sense dada) transparents
+REFL = {1: (0, 0, 0, 0), 2: (150, 215, 255, 150), 3: (70, 160, 255, 190), 4: (0, 190, 220, 205), 5: (0, 190, 80, 215),
+        6: (170, 215, 0, 225), 7: (255, 235, 0, 230), 8: (255, 150, 0, 235), 9: (240, 40, 20, 240),
+        10: (170, 0, 30, 245), 11: (210, 0, 170, 250), 12: (150, 60, 220, 255)}
+ESCALA_REFL = 3
 NOMS = {1: "Vigilància", 2: "Atenció", 3: "Alerta"}
 
 
@@ -34,7 +56,7 @@ def nivell(a):
         return 3
     if d >= 90 and mm >= 20:
         return 2
-    if d >= 40:
+    if d >= 30:
         return 1
     return 0
 
@@ -47,6 +69,7 @@ def main():
     ap.add_argument("--min-px", type=int, default=12, help="àrea mínima en píxels de radar (~6,9 km2 cadascun)")
     ap.add_argument("--bbox", type=float, nargs=4, default=BBOX_CAT, metavar=("LON0", "LAT0", "LON1", "LAT1"))
     ap.add_argument("--historial", type=float, default=48, help="hores d'historial a calcular (0 = només l'últim)")
+    ap.add_argument("--no-refl", action="store_true", help="no genera les imatges de reflectivitat")
     ap.add_argument("--final", help="AAAAMMDDHHMM UTC (per defecte, l'últim fotograma)")
     a = ap.parse_args()
 
@@ -91,17 +114,13 @@ def main():
         res.sort(key=lambda c: (-c["nivell"], -c["enganxada_min"]))
         return res
 
-    # --- últim fotograma: JSON complet + contorns PNG
+    # --- últim fotograma: JSON complet (el visor dibuixa quadrats a partir del bbox)
     cel_les = []
-    img = np.zeros((H * ESCALA, W * ESCALA, 4), np.uint8)
     for av in avisos_fotograma(k):
-        mask = av.pop("mask")
+        av.pop("mask")
         for kk in ("cy", "cx", "area_px"):
             av.pop(kk, None)
         cel_les.append(av)
-        m4 = np.kron(mask, np.ones((ESCALA, ESCALA), bool))
-        vora = m4 & ~ndimage.binary_erosion(m4, iterations=2)
-        img[vora] = COLORS[av["nivell"]]
 
     # --- historial compacte: per fotograma, files [nivell, lat, lon, km2, enganxada, classe, mm_mitj, mm_max, mm_h, s, w, n, e]
     hist = {}
@@ -124,7 +143,27 @@ def main():
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
-    Image.fromarray(img, "RGBA").save(tmp / "avisos.png")
+
+    # --- Imatges de reflectivitat per fotograma (incremental: només les que falten; es conserven entre execucions)
+    if not a.no_refl:
+        dest_refl = Path(a.sortida) / "refl"
+        if dest_refl.exists():
+            shutil.move(str(dest_refl), str(tmp / "refl"))
+        refl = tmp / "refl"
+        refl.mkdir(exist_ok=True)
+        lut = np.zeros((256, 4), np.uint8)
+        for c, rgba in REFL.items():
+            lut[c] = rgba
+        clau_min = (fi - timedelta(hours=a.historial)).strftime("%Y%m%d%H%M")
+        for kk in range(len(ts)):
+            clau = ts[kk].strftime("%Y%m%d%H%M")
+            if clau < clau_min or not ok[kk] or (refl / f"{clau}.png").exists():
+                continue
+            cl = np.kron(cub[kk], np.ones((ESCALA_REFL, ESCALA_REFL), np.uint8))
+            Image.fromarray(lut[cl], "RGBA").save(refl / f"{clau}.png", optimize=True)
+        for f in refl.glob("*.png"):          # neteja el que surt de la finestra
+            if f.stem < clau_min:
+                f.unlink()
     (tmp / "avisos.json").write_text(json.dumps({
         "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "bounds": lb,
         "parametres": {"llindar_classe": a.llindar, "min_area_km2": round(a.min_px * 6.9)},
