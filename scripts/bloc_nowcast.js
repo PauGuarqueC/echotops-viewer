@@ -136,7 +136,12 @@
       }
       return res;
     };
-    const punts = [{ q: r0, ms: nowcMs(clau) }].concat(camina(-1), camina(+1)).filter(p => p.q[5] !== undefined).sort((x, y) => x.ms - y.ms);
+    const cadena = [{ q: r0, ms: nowcMs(clau) }].concat(camina(-1), camina(+1)).filter(p => p.q[5] !== undefined).sort((x, y) => x.ms - y.ms);
+    // alternativa: tota la pista amb el mateix id (és la que dibuixa el rastre); es tria la que cobreix més temps
+    const perId = [];
+    Object.keys(D.frames).sort().forEach(k => { const q = D.frames[k].find(z => z[0] === r0[0]); if (q && q[5] !== undefined) perId.push({ q, ms: nowcMs(k) }); });
+    const span = a => a.length ? a[a.length - 1].ms - a[0].ms : 0;
+    const punts = span(perId) > span(cadena) ? perId : cadena;
     let acum = 0, prev = null;
     const S = punts.map(p => { acum += p.q[5] * (prev === null ? pas : p.ms - prev) / 3600000; prev = p.ms; return { ms: p.ms, mmh: p.q[5], acum: Math.round(acum * 10) / 10 }; });
     return S.length >= 2 ? S : null;
