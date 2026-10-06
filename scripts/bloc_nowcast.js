@@ -47,11 +47,12 @@
 
   // Mateix contingut al popup del mapa i als avisos fixos
   function nowcHtml(c, horaTxt, ara){
-    return `<b style="color:${NOWC_COL[c.nivell]}">${NOWC_NOM[c.nivell]}</b> · enganxada fa <b>${nowcDurada(c.enganxada_min)}</b><br>` +
-      `Àrea ~${c.area_km2} km² · màx ${NOWC_DBZ[c.classe_max] || '> 35'} dBZ<br>` +
-      `Des que s'ha parat: ~${c.mm_mitjana} mm de mitjana (fins a ~${c.mm_max} mm)<br>` +
-      `${ara ? 'Ara' : 'Aleshores'}: ~${c.mm_h_ara} mm/h` +
-      `<div style="margin-top:4px;opacity:.7;font-size:11px;">Radar de les ${horaTxt} (hora local). Mm orientatius (Z-R), sense validar amb pluviòmetres.</div>`;
+    const f = (t, v) => `<div style="margin-top:2px;"><span style="opacity:.7">${t}</span> ${v}</div>`;
+    return `<b style="color:${NOWC_COL[c.nivell]}">${NOWC_NOM[c.nivell]}</b> · radar de les ${horaTxt}` +
+      `<div style="margin-top:2px;">Tempesta aturada fa <b>${nowcDurada(c.enganxada_min)}</b></div>` +
+      f('Intensitat de pluja:', `<b>~${c.mm_h_ara} mm/h</b>`) +
+      f('Acumulat des que s\'ha aturat:', `<b>~${c.mm_mitjana} mm</b> de mitjana · fins a <b>~${c.mm_max} mm</b>`) +
+      f('Reflectivitat màxima:', `${NOWC_DBZ[c.classe_max] || '> 35'} dBZ`);
   }
 
   // ---- So (Web Audio; els navegadors només el deixen sonar després d'una interacció de l'usuari) ----
