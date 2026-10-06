@@ -487,8 +487,9 @@
       for (let q = 0; q < nseg; q++){            // etiquetes cada hora i a l'extrem més antic (si passa de 30 min)
         const min = (nseg - q) * pasMin;
         if (min % 60 === 0 || (q === 0 && min >= 30)){
-          L.marker(pts[q], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'nowc-tk', iconSize: [0, 0],
-            html: `<span class="nowc-tk-t">−${min % 60 === 0 ? (min / 60) + ' h' : min + '′'}</span>` }) }).addTo(nowc.movCapa);
+          const mk = L.marker(pts[q], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'nowc-tk', iconSize: [0, 0],
+            html: `<span class="nowc-tk-t">−${min % 60 === 0 ? (min / 60) + ' h' : min + '′'}</span>` }) });
+          mk._exp = { t: 'tk', txt: `−${min % 60 === 0 ? (min / 60) + ' h' : min + '′'}` }; mk.addTo(nowc.movCapa);
         }
       }
       // cap de la cel·la: fletxa orientada + etiqueta de velocitat
@@ -501,6 +502,7 @@
           <path d="M0 -22 L6.2 -11.6 L0 -14.8 L-6.2 -11.6 Z" fill="${col}" stroke="#fff" stroke-width="1" stroke-linejoin="round"/></svg>` : '';
       const m = L.marker([lat, lon], { keyboard: false, icon: L.divIcon({ className: 'nowc-mv', iconSize: [48, 48], iconAnchor: [24, 24],
         html: `${fletxa}<span class="nowc-dot" style="background:${col}"></span>${pill}` }) });
+      m._exp = { t: 'mv', col, mou, rumb, pill: vel === null ? '' : (vel < 8 ? 'quasi quieta' : vel + ' km/h') };
       const txt = `<div class="nowc-pop"><div class="nowc-pop-v">${vel === null ? '—' : (vel < 8 ? 'Quasi quieta' : vel + ' km/h')}` +
         `${mou ? ` <span>cap al ${nowcRumbTxt(rumb)}</span>` : ''}</div>` +
         `<div class="nowc-pop-s">${vel === null ? 'Encara no calculable (cel·la recent)' : (mou ? `Rumb ${rumb}° · ` : '') + `~${vel} km/h`}` +
@@ -716,4 +718,308 @@
   async function nowcCicle(){ await nowcCarrega(); nowcMostra(); nowcRevisaNoves(); }
   nowcCicle();
   nowc.timer = setInterval(nowcCicle, 2 * 60 * 1000);
+
+  // ---- Exportació d'imatge: l'usuari tria l'àrea i es compon (a alta resolució) amb les capes actives i les seves llegendes ----
+  const EXP = { actiu: false, bar: null, caixa: null, ocupat: false, net: null };
+  const EXP_FONT = 'Roboto, "Helvetica Neue", Arial, sans-serif', EXP_MONO = '"Roboto Mono", ui-monospace, Menlo, monospace';
+  const EXP_LLARG = 3000;                                    // píxels del costat llarg del mapa exportat
+  const EXP_ECHO_COLS = ['#0000B3', '#0033FF', '#0080FF', '#00CCFF', '#00FFFF', '#4C7300', '#80B300', '#00CC00', '#FFFF00', '#FFA500', '#FF7F00', '#FF0000', '#FF00FF', '#800080'];
+  const EXP_ECHO_LBL = ['1', '2', '3', '4', '5', '6', '7', '8', '10', '12', '14', '16', '20'];
+  (function(){
+    const st = document.createElement('style');
+    st.textContent = `
+      #map.exp-sel, #map.exp-sel .leaflet-interactive{ cursor:crosshair !important; touch-action:none; }
+      #exp-bar{ position:fixed; top:74px; left:50%; transform:translateX(-50%); z-index:2500; background:var(--panel, #fff); color:var(--text, #222);
+        border:1px solid var(--panel-border, #ccc); border-radius:3px; box-shadow:0 2px 10px rgba(0,0,0,.3); padding:8px 10px; font:13px/1.3 var(--font-ui, sans-serif);
+        display:flex; align-items:center; gap:10px; flex-wrap:wrap; max-width:calc(100vw - 16px); }
+      #exp-bar b{ font-weight:600; }
+      #exp-bar button{ font:inherit; font-size:12px; padding:5px 10px; border:1px solid var(--panel-border, #ccc); background:#fff; color:inherit; border-radius:3px; cursor:pointer; }
+      #exp-bar button:hover{ border-color:#C8102E; color:#C8102E; }
+      #exp-caixa{ position:absolute; z-index:1200; border:2px solid #fff; outline:1px solid rgba(0,0,0,.6); box-shadow:0 0 0 9999px rgba(8,12,18,.45); pointer-events:none; }
+      @media (max-width:640px){ #exp-bar{ top:64px; font-size:12px; } }`;
+    document.head.appendChild(st);
+    const btn = document.getElementById('export-btn');
+    if (btn) btn.addEventListener('click', e => { e.stopImmediatePropagation(); e.preventDefault(); EXP.actiu ? expAtura() : expInici(); }, true);
+  })();
+
+  function expTs(){
+    if (typeof currentTs !== 'undefined' && currentTs) return currentTs;
+    if (nowc.ts) return nowc.ts;
+    const f = nowc.hist && nowc.hist.final_utc; if (!f) return null;
+    const k = nowcClau(nowcMs(f.replace(/[-:TZ]/g, '').slice(0, 12))); return k.slice(0, 8) + '_' + k.slice(8);
+  }
+  function expMissatge(h){ if (EXP.bar){ EXP.bar.querySelector('.exp-t').innerHTML = h; } }
+  function expInici(){
+    const ov = document.getElementById('export-overlay'); if (ov) ov.classList.remove('visible');
+    if (!expTs()){ alert('Encara no hi ha cap frame carregat.'); return; }
+    EXP.actiu = true;
+    const btn = document.getElementById('export-btn'); if (btn) btn.classList.add('active');
+    map.closePopup();
+    map.dragging.disable(); map.doubleClickZoom.disable();
+    const cont = map.getContainer(); cont.classList.add('exp-sel');
+    const bar = document.createElement('div'); bar.id = 'exp-bar';
+    bar.innerHTML = '<span class="exp-t"><b>Exporta imatge</b> · arrossega sobre el mapa per triar l\'àrea</span>' +
+      '<button data-a="tot">Tot el mapa visible</button><button data-a="gif">GIF…</button><button data-a="no">Cancel·la</button>';
+    document.body.appendChild(bar); EXP.bar = bar;
+    L.DomEvent.disableClickPropagation(bar);
+    bar.addEventListener('click', e => {
+      const a = e.target.dataset && e.target.dataset.a; if (!a || EXP.ocupat) return;
+      if (a === 'no') expAtura();
+      else if (a === 'tot'){ const s = map.getSize(); expGenera(0, 0, s.x, s.y); }
+      else if (a === 'gif'){ expAtura(); const o = document.getElementById('export-overlay'); if (o) o.classList.add('visible'); if (btn) btn.classList.add('active'); }
+    });
+    let ini = null;
+    const pt = e => { const r = cont.getBoundingClientRect(); return [Math.min(Math.max(e.clientX - r.left, 0), r.width), Math.min(Math.max(e.clientY - r.top, 0), r.height)]; };
+    const pinta = p => {
+      if (!EXP.caixa){ EXP.caixa = document.createElement('div'); EXP.caixa.id = 'exp-caixa'; cont.appendChild(EXP.caixa); }
+      const x = Math.min(ini[0], p[0]), y = Math.min(ini[1], p[1]);
+      Object.assign(EXP.caixa.style, { left: x + 'px', top: y + 'px', width: Math.abs(p[0] - ini[0]) + 'px', height: Math.abs(p[1] - ini[1]) + 'px' });
+    };
+    const down = e => {
+      if (EXP.ocupat || (e.button !== undefined && e.button > 0) || e.target.closest('.leaflet-control, #exp-bar, .leaflet-popup')) return;
+      e.preventDefault(); e.stopPropagation();
+      ini = pt(e); try{ cont.setPointerCapture(e.pointerId); }catch(_){}
+      pinta(ini);
+    };
+    const move = e => { if (!ini) return; e.preventDefault(); pinta(pt(e)); };
+    const up = e => {
+      if (!ini) return;
+      const p = pt(e), a = ini; ini = null;
+      if (Math.abs(p[0] - a[0]) < 30 || Math.abs(p[1] - a[1]) < 30){ if (EXP.caixa){ EXP.caixa.remove(); EXP.caixa = null; } return; }
+      expGenera(Math.min(a[0], p[0]), Math.min(a[1], p[1]), Math.max(a[0], p[0]), Math.max(a[1], p[1]));
+    };
+    const tecla = e => { if (e.key === 'Escape' && !EXP.ocupat) expAtura(); };
+    cont.addEventListener('pointerdown', down, true); cont.addEventListener('pointermove', move, true); cont.addEventListener('pointerup', up, true);
+    document.addEventListener('keydown', tecla);
+    EXP.net = () => {
+      cont.removeEventListener('pointerdown', down, true); cont.removeEventListener('pointermove', move, true); cont.removeEventListener('pointerup', up, true);
+      document.removeEventListener('keydown', tecla);
+    };
+  }
+  function expAtura(){
+    EXP.actiu = false; EXP.ocupat = false;
+    if (EXP.net){ EXP.net(); EXP.net = null; }
+    if (EXP.bar){ EXP.bar.remove(); EXP.bar = null; }
+    if (EXP.caixa){ EXP.caixa.remove(); EXP.caixa = null; }
+    map.dragging.enable(); map.doubleClickZoom.enable();
+    map.getContainer().classList.remove('exp-sel');
+    const btn = document.getElementById('export-btn'); if (btn) btn.classList.remove('active');
+  }
+
+  const expImg = url => new Promise(res => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
+  async function expPool(items, n, fn){ let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length){ await fn(items[i++]); } })); }
+
+  // Capa de tessel·les (mapa base o satèl·lit): només es demanen les que cauen dins l'àrea
+  async function expTessel(ctx, o){
+    const a = map.project(o.nw, o.zt), b = map.project(o.se, o.zt), nMax = Math.round(256 * Math.pow(2, o.zt) / o.tam);
+    const llista = [];
+    for (let x = Math.floor(a.x / o.tam); x <= Math.floor(b.x / o.tam); x++)
+      for (let y = Math.max(0, Math.floor(a.y / o.tam)); y <= Math.min(nMax - 1, Math.floor(b.y / o.tam)); y++) llista.push([x, y]);
+    let fets = 0, fallats = 0;
+    await expPool(llista, 8, async ([x, y]) => {
+      const im = await expImg(o.url(((x % nMax) + nMax) % nMax, y));
+      if (im){ const r = o.rect(x, y); ctx.globalAlpha = o.alpha; ctx.drawImage(im, r[0], r[1], r[2] + 0.7, r[3] + 0.7); ctx.globalAlpha = 1; } else fallats++;
+      o.prog && o.prog(++fets, llista.length);
+    });
+    return { total: llista.length, fallats };
+  }
+
+  function expVectors(ctx, P, k){
+    const grups = [];
+    [nowc.marcs, nowc.movCapa].forEach(g => { if (g && map.hasLayer(g)) grups.push(g); });
+    const marcadors = [];
+    const traç = (l, trac) => {
+      const o = l.options;
+      if (o.fill && o.fillOpacity > 0){ ctx.globalAlpha = o.fillOpacity; ctx.fillStyle = o.fillColor || o.color; ctx.fill(); }
+      if (o.stroke !== false && o.weight > 0){
+        ctx.globalAlpha = o.opacity === undefined ? 1 : o.opacity; ctx.strokeStyle = o.color; ctx.lineWidth = o.weight * k;
+        ctx.lineCap = o.lineCap || 'round'; ctx.lineJoin = 'round';
+        ctx.setLineDash(o.dashArray ? String(o.dashArray).split(/[ ,]+/).map(v => +v * k) : []);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1; ctx.setLineDash([]);
+    };
+    grups.forEach(g => g.eachLayer(l => {
+      if (l instanceof L.Rectangle){
+        const b = l.getBounds(), p1 = P(b.getNorthWest()), p2 = P(b.getSouthEast());
+        ctx.beginPath(); ctx.rect(p1[0], p1[1], p2[0] - p1[0], p2[1] - p1[1]); traç(l);
+      }else if (l instanceof L.CircleMarker){
+        const p = P(l.getLatLng());
+        ctx.beginPath(); ctx.arc(p[0], p[1], l.getRadius() * k, 0, 2 * Math.PI); traç(l);
+      }else if (l instanceof L.Polyline){
+        const ll = l.getLatLngs(); ctx.beginPath();
+        ll.forEach((q, i) => { const p = P(q); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
+        traç(l);
+      }else if (l instanceof L.Marker && l._exp){ marcadors.push(l); }
+    }));
+    marcadors.forEach(l => {
+      const e = l._exp, p = P(l.getLatLng());
+      ctx.save(); ctx.translate(p[0], p[1]); ctx.scale(k, k);
+      if (e.t === 'tk'){
+        ctx.font = `600 9.5px ${EXP_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 3; ctx.fillStyle = '#fff';
+        ctx.fillText(e.txt, 0, 6 + 5); ctx.fillText(e.txt, 0, 6 + 5);
+      }else if (e.t === 'mv'){
+        if (e.mou){
+          ctx.save(); ctx.rotate(e.rumb * Math.PI / 180); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          ctx.strokeStyle = 'rgba(11,19,32,.55)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(0, -15); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, -23); ctx.lineTo(7.5, -11); ctx.lineTo(0, -14.5); ctx.lineTo(-7.5, -11); ctx.closePath();
+          ctx.fillStyle = 'rgba(11,19,32,.55)'; ctx.fill(); ctx.lineWidth = 3.5; ctx.stroke();
+          ctx.strokeStyle = e.col; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(0, -15); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, -22); ctx.lineTo(6.2, -11.6); ctx.lineTo(0, -14.8); ctx.lineTo(-6.2, -11.6); ctx.closePath();
+          ctx.fillStyle = e.col; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+          ctx.restore();
+        }
+        ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
+        ctx.beginPath(); ctx.arc(0, 0, 5.5, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(11,19,32,.6)'; ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.beginPath(); ctx.arc(0, 0, 5, 0, 2 * Math.PI); ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, 3, 0, 2 * Math.PI); ctx.fillStyle = e.col; ctx.fill();
+        if (e.pill && map.getZoom() >= 8){
+          ctx.font = `600 10.5px ${EXP_MONO}`;
+          const w = ctx.measureText(e.pill).width + 14, h = 19, x = 10, y = 4;
+          ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 9.5) : ctx.rect(x, y, w, h);
+          ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
+          ctx.fillStyle = 'rgba(11,19,32,.82)'; ctx.fill(); ctx.shadowColor = 'transparent';
+          ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1; ctx.stroke();
+          ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(e.pill, x + 7, y + h / 2 + 0.5);
+        }
+      }
+      ctx.restore();
+    });
+  }
+
+  async function expGenera(x0, y0, x1, y1){
+    if (EXP.ocupat) return;
+    EXP.ocupat = true;
+    if (!EXP.caixa){ EXP.caixa = document.createElement('div'); EXP.caixa.id = 'exp-caixa'; map.getContainer().appendChild(EXP.caixa); }
+    Object.assign(EXP.caixa.style, { left: x0 + 'px', top: y0 + 'px', width: (x1 - x0) + 'px', height: (y1 - y0) + 'px' });
+    try{
+      const selW = x1 - x0, selH = y1 - y0;
+      const k = Math.min(8, Math.max(1, EXP_LLARG / Math.max(selW, selH)));
+      const MW = Math.round(selW * k), MH = Math.round(selH * k);
+      const Zf = map.getZoom() + Math.log2(k);
+      const nw = map.containerPointToLatLng([x0, y0]), se = map.containerPointToLatLng([x1, y1]);
+      const org = map.project(nw, Zf);
+      const P = ll => { const q = map.project(L.latLng(ll), Zf); return [q.x - org.x, q.y - org.y]; };
+
+      // --- quines capes estan actives
+      const echoOn = typeof currentOverlay !== 'undefined' && currentOverlay && map.hasLayer(currentOverlay) && currentOverlay.options.opacity > 0;
+      const reflOn = !!(refl.overlay && map.hasLayer(refl.overlay));
+      const satOn = !!(sat.capa && map.hasLayer(sat.capa));
+      const stormOn = !!(nowc.marcs && map.hasLayer(nowc.marcs) && nowc.marcs.getLayers().length);
+      const base = Object.values(baseLayers).filter(l => map.hasLayer(l));
+
+      // --- peus i capçalera: dimensions segons l'amplada final
+      const Wc = Math.max(MW, 1500), u = Wc / 1000, HH = Math.round(56 * u), FH = Math.round(86 * u);
+      const cv = document.createElement('canvas'); cv.width = Wc; cv.height = HH + MH + FH;
+      const ctx = cv.getContext('2d'); ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#e9ecef'; ctx.fillRect(0, 0, cv.width, cv.height);
+      const mx = Math.round((Wc - MW) / 2), my = HH;
+
+      // --- mapa
+      ctx.save(); ctx.beginPath(); ctx.rect(mx, my, MW, MH); ctx.clip(); ctx.translate(mx, my);
+      ctx.fillStyle = '#cfd6dd'; ctx.fillRect(0, 0, MW, MH);
+      let prog = (n, t) => expMissatge(`<b>Generant imatge…</b> ${n} / ${t} tessel·les`);
+      let fallBase = 0, totBase = 0;
+      for (const l of base){
+        const zt = Math.min(l.options.maxZoom || 12, Math.round(Zf)), sc = Math.pow(2, Zf - zt);
+        const r = await expTessel(ctx, { tam: 256, zt, nw, se, alpha: l.options.opacity === undefined ? 1 : l.options.opacity, prog,
+          url: (x, y) => { const tz = l._tileZoom; l._tileZoom = zt; try{ return l.getTileUrl({ x, y, z: zt }); } finally { l._tileZoom = tz; } },
+          rect: (x, y) => [x * 256 * sc - org.x, y * 256 * sc - org.y, 256 * sc, 256 * sc] });
+        fallBase += r.fallats; totBase += r.total;
+      }
+      if (satOn){
+        const zt = Math.min(12, Math.round(Zf));
+        await expTessel(ctx, { tam: 512, zt, nw, se, alpha: sat.capa.options.opacity, prog,
+          url: (x, y) => sat.capa.getTileUrl(Object.assign(L.point(x, y), { z: zt })),
+          rect: (x, y) => { const a = P(map.unproject(L.point(x * 512, y * 512), zt)), b = P(map.unproject(L.point((x + 1) * 512, (y + 1) * 512), zt)); return [a[0], a[1], b[0] - a[0], b[1] - a[1]]; } });
+      }
+      expMissatge('<b>Generant imatge…</b> radar i tempestes');
+      for (const ov of [echoOn ? currentOverlay : null, reflOn ? refl.overlay : null]){
+        if (!ov) continue;
+        const im = await expImg(ov._url);
+        if (!im) continue;
+        const b = ov.getBounds(), a = P(b.getNorthWest()), c = P(b.getSouthEast());
+        ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
+      }
+      expVectors(ctx, P, k);
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = Math.max(1, u); ctx.strokeRect(mx, my, MW, MH);
+
+      // --- capçalera
+      const TS = expTs(), ms = nowcMs(TS.replace('_', ''));
+      const dl = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(ms));
+      const noms = [];
+      if (echoOn) noms.push('Echotops (Meteocat)'); if (reflOn) noms.push('Reflectivitat (AEMET)'); if (satOn) noms.push('Satèl·lit IR 10,5 µm (MTG)'); if (stormOn) noms.push('Tempestes enganxades');
+      ctx.fillStyle = '#2b2b2b'; ctx.fillRect(0, 0, Wc, HH);
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.fillStyle = '#fff'; ctx.font = `700 ${22 * u}px ${EXP_FONT}`;
+      const t1 = 'Echo Tops'; ctx.fillText(t1, 18 * u, HH / 2);
+      const wt = ctx.measureText(t1).width;
+      ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.font = `400 ${13 * u}px ${EXP_FONT}`;
+      ctx.fillText(noms.join('  ·  '), 18 * u + wt + 14 * u, HH / 2 + 1 * u);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#fff'; ctx.font = `600 ${13 * u}px ${EXP_MONO}`;
+      const dUtc = nowcClau(ms).slice(8, 10) + ':' + nowcClau(ms).slice(10, 12) + ' UTC';
+      const wU = ctx.measureText(dUtc).width;
+      ctx.fillText(dUtc, Wc - 18 * u, HH / 2 + 1 * u);
+      ctx.fillStyle = '#ff4d63'; ctx.font = `700 ${22 * u}px ${EXP_MONO}`;
+      ctx.fillText(`${dl}  ${nowcHoraLocal(ms)}`, Wc - 18 * u - wU - 14 * u, HH / 2);
+      ctx.textAlign = 'left';
+
+      // --- peu: llegendes de les capes actives
+      const fy = HH + MH; ctx.fillStyle = '#fff'; ctx.fillRect(0, fy, Wc, FH);
+      ctx.fillStyle = '#d3d8de'; ctx.fillRect(0, fy, Wc, Math.max(1, u));
+      const blocs = [];
+      if (echoOn) blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, 'ALÇADA ECHO TOP (KM)', EXP_ECHO_COLS, EXP_ECHO_LBL, 'frontera') });
+      if (reflOn) blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, 'REFLECTIVITAT RADAR (dBZ)', REFL_LLEGENDA.map(q => q[0]), REFL_LLEGENDA.map((q, i) => i % 2 === 0 ? q[1] + (i === REFL_LLEGENDA.length - 1 ? '+' : '') : ''), 'centre') });
+      if (satOn){
+        const li = await expImg(`${SAT.url}?service=WMS&request=GetLegendGraphic&version=1.3.0&format=image/png&layer=${encodeURIComponent(SAT.capa)}&style=${encodeURIComponent(SAT.estil)}`);
+        blocs.push({ w: 3, f: (x, y, w) => {
+          ctx.fillStyle = '#52606d'; ctx.font = `600 ${9.5 * u}px ${EXP_FONT}`; ctx.fillText('SATÈL·LIT IR 10,5 µm (MTG)', x, y + 6 * u);
+          if (li){ const h = Math.min(34 * u, w * li.height / li.width), ww = h * li.width / li.height; ctx.drawImage(li, x, y + 14 * u, Math.min(w, ww), h); }
+        } });
+      }
+      if (stormOn) blocs.push({ w: 2.4, f: (x, y, w) => {
+        ctx.fillStyle = '#52606d'; ctx.font = `600 ${9.5 * u}px ${EXP_FONT}`; ctx.fillText('TEMPESTES ENGANXADES', x, y + 6 * u);
+        const it = [[NOWC_COL[1], 'Vigilància'], [NOWC_COL[2], 'Atenció'], [NOWC_COL[3], 'Alerta'], [NOWC_COL_MAR, 'Sobre el mar']];
+        ctx.font = `400 ${10.5 * u}px ${EXP_FONT}`;
+        it.forEach(([c, t], i) => { const cx = x + (i % 2) * w / 2, cy = y + (22 + Math.floor(i / 2) * 17) * u;
+          ctx.fillStyle = c; ctx.fillRect(cx, cy - 5 * u, 10 * u, 10 * u); ctx.fillStyle = '#243b53'; ctx.fillText(t, cx + 15 * u, cy + 0.5 * u); });
+      } });
+      const tot = blocs.reduce((s, b) => s + b.w, 0), pad = 18 * u, gap = 26 * u;
+      let cx = pad; const util = Wc - 2 * pad - gap * Math.max(0, blocs.length - 1);
+      blocs.forEach(b => { const w = Math.min(util * b.w / tot, 520 * u); b.f(cx, fy + 12 * u, w); cx += w + gap; });
+      ctx.fillStyle = '#7b8794'; ctx.font = `400 ${9 * u}px ${EXP_FONT}`; ctx.textAlign = 'left';
+      const cred = ['Meteocat', 'AEMET'].filter((_, i) => (i === 0 ? echoOn : reflOn || stormOn)).join(' · ');
+      const txtCred = `Dades: ${cred}${satOn ? (cred ? ' · ' : '') + '© EUMETSAT' : ''}  |  Mapa base: ${base.length ? (currentBase === 'satelit' ? 'Esri' : currentBase === 'topo' ? '© OpenTopoMap · OSM' : '© CARTO · © OpenStreetMap') : ''}`;
+      ctx.fillText(txtCred, pad, fy + FH - 11 * u);
+      if (totBase && fallBase > totBase * 0.2) { ctx.textAlign = 'right'; ctx.fillStyle = '#C8102E'; ctx.fillText('Atenció: part del mapa base no s\'ha pogut carregar', Wc - pad, fy + FH - 11 * u); }
+
+      expMissatge('<b>Desant…</b>');
+      const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+      if (!blob) throw new Error('canvas buit');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = `echotops_${TS.replace('_', '')}Z${satOn ? '_sat' : ''}${reflOn ? '_refl' : ''}.png`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+      expMissatge(`✓ <b>Imatge descarregada</b> (${cv.width}×${cv.height} px)`);
+      setTimeout(() => { if (EXP.actiu) expAtura(); }, 1800);
+    }catch(err){
+      console.error(err);
+      expMissatge('<b style="color:#C8102E">No s\'ha pogut generar la imatge.</b> ' + (err && err.message ? err.message : ''));
+      EXP.ocupat = false;
+      if (EXP.caixa){ EXP.caixa.remove(); EXP.caixa = null; }
+    }
+  }
+  // Barra de colors amb etiquetes (a la frontera entre bandes o al centre de cada banda)
+  function expLlegBandes(ctx, u, x, y, w, titol, cols, lbl, mode){
+    ctx.fillStyle = '#52606d'; ctx.font = `600 ${9.5 * u}px ${EXP_FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(titol, x, y + 6 * u);
+    const bw = w / cols.length, by = y + 16 * u;
+    cols.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(x + i * bw, by, bw + 0.5, 15 * u); });
+    ctx.fillStyle = '#243b53'; ctx.font = `400 ${9.5 * u}px ${EXP_MONO}`; ctx.textAlign = 'center';
+    lbl.forEach((t, i) => { if (t) ctx.fillText(t, x + (mode === 'centre' ? (i + 0.5) : (i + 1)) * bw, by + 24 * u); });
+    ctx.textAlign = 'left';
+  }
   // ---- fi Tempestes enganxades ----
