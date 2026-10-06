@@ -912,7 +912,22 @@
   setInterval(modRefresca, 15 * 60 * 1000);
 
   // ---- Contorns i noms a les exportacions (imatge i GIF), no al visor ----
-  // Els límits (data/comarques.geojson) es dibuixen per sobre de les capes de dades. Sense noms.
+  // Els límits de comarques (WMS de l'ICGC; si no respon, data/comarques.geojson) es dibuixen en blanc per sobre de les capes de dades. Sense noms.
+  // Límits de comarques de l'ICGC (WMS, PNG transparent). Es demana una sola imatge per a tota l'àrea exportada, i es pinta de blanc.
+  const LIM_WMS = 'https://geoserveis.icgc.cat/servei/catalunya/divisions-administratives/wms';
+  const LIM_CAPES = ['1000000', '500000', '250000', '100000', '50000', '5000'].map(n => 'divisions_administratives_comarques_' + n).join(',');
+  async function limWms(nw, se, W, H){
+    const a = L.CRS.EPSG3857.project(nw), b = L.CRS.EPSG3857.project(se);
+    const bbox = [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)].map(v => v.toFixed(2)).join(',');
+    const url = `${LIM_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${LIM_CAPES}&STYLES=&CRS=EPSG:3857&BBOX=${bbox}&WIDTH=${W}&HEIGHT=${H}&FORMAT=image/png&TRANSPARENT=TRUE`;
+    return await expImg(url);
+  }
+  function limDibuixaWms(ctx, im, W, H){
+    const t = document.createElement('canvas'); t.width = W; t.height = H;
+    const g = t.getContext('2d'); g.drawImage(im, 0, 0, W, H);
+    g.globalCompositeOperation = 'source-in'; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);   // tot blanc, es conserva només l'alfa de la línia
+    ctx.globalAlpha = 0.85; ctx.drawImage(t, 0, 0); ctx.globalAlpha = 1;
+  }
   async function limCarrega(){
     if (lim.com !== undefined || lim.carregant) return;
     lim.carregant = true;
@@ -1181,7 +1196,9 @@
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
       }
       if (!opt.senseLimits){
-        await limCarrega(); expLimits(ctx, P, k);
+        const wi = await limWms(nw, se, MW, MH);
+        if (wi) limDibuixaWms(ctx, wi, MW, MH);
+        else { await limCarrega(); expLimits(ctx, P, k); }                        // si el WMS no respon: comarques.geojson
       }
       expVectors(ctx, P, k);
       ctx.restore();
