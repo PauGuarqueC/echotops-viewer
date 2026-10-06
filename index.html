@@ -515,7 +515,9 @@ function initMap(){
   const nowc = { hist: null, ultim: null, marcs: L.layerGroup(), actiu: true, timer: null, ts: null, vistos: [], so: true, audio: null, pendent: 0,
     mov: null, movActiu: false, movCapa: L.layerGroup() };
   const refl = { overlay: null, actiu: false, mode: 'echo' };
+  const capaM = m => CAPA_MODES[m] || ((typeof m === 'string' && m.indexOf('mod:') === 0) ? [false, false] : null);
   const CAPA_MODES = { 'echo': [false, false], 'refl': [true, false], 'sat': [false, true], 'echo+sat': [false, true], 'refl+sat': [true, true] };
+  const mod = { models: {}, sel: null, t: null, acum: 0, overlay: null, cur: null, cache: {}, token: 0, pendent: null, cs: null, aplica: null };
   const sat = { actiu: false, op: 65, capa: null, time: null, errs: 0 };
   const REFL_LLEGENDA = [['rgb(150,215,255)', '15'], ['rgb(70,160,255)', '20'], ['rgb(0,190,220)', '25'], ['rgb(0,190,80)', '30'],
     ['rgb(170,215,0)', '35'], ['rgb(255,235,0)', '40'], ['rgb(255,150,0)', '45'], ['rgb(240,40,20)', '50'],
@@ -836,6 +838,19 @@ function initMap(){
           <option value="refl+sat">Reflectivitat + satèl·lit</option>
         </select>
         <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
+        <div id="mod-ctl" style="display:none;margin-top:4px;">
+          <div id="mod-info" style="font-size:11px;line-height:1.4;"></div>
+          <div style="display:flex;align-items:center;gap:4px;margin-top:4px;">
+            <button type="button" id="mod-prev" title="Hora anterior" style="padding:2px 8px;">◀</button>
+            <input type="range" id="mod-t" min="1" max="48" step="1" style="flex:1;margin:0;min-width:0;" title="Hora de la previsió">
+            <button type="button" id="mod-next" title="Hora següent" style="padding:2px 8px;">▶</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;">
+            <span id="mod-acum-row" style="display:none;align-items:center;gap:4px;">Acumulat
+              <select id="mod-acum"><option value="0">des de l'inici</option><option value="3">3 h</option><option value="6">6 h</option><option value="12">12 h</option><option value="24">24 h</option></select></span>
+            <button type="button" id="mod-ara" style="margin-left:auto;padding:2px 8px;">Ara</button>
+          </div>
+        </div>
         <div id="sat-ctl" style="display:none;margin-top:4px;">
           <div style="display:flex;align-items:center;gap:6px;font-size:11px;opacity:.85;"><span>Opacitat satèl·lit</span>
             <input type="range" id="sat-op" min="20" max="100" step="5" style="flex:1;margin:0;min-width:0;" title="Opacitat del satèl·lit"></div>
@@ -863,15 +878,16 @@ function initMap(){
       L.DomEvent.disableScrollPropagation(div);
       div.querySelector('#nowc-toggle').addEventListener('change', e => nowcActiva(e.target.checked));
       const cs = div.querySelector('#capa-sel'), so_ = div.querySelector('#sat-op');
-      try{ const m = localStorage.getItem(NOWC_LS_CAPA); if (m && CAPA_MODES[m]) refl.mode = m; }catch(_){}
+      try{ const m = localStorage.getItem(NOWC_LS_CAPA); if (m && CAPA_MODES[m]) refl.mode = m; else if (m && m.indexOf('mod:') === 0) mod.pendent = m; }catch(_){}
       try{ const o = +(JSON.parse(localStorage.getItem(NOWC_LS_SAT) || '{}').op); if (o >= 20 && o <= 100) sat.op = o; }catch(_){}
       cs.value = refl.mode; so_.value = sat.op;
-      const capaAplica = () => { [refl.actiu, sat.actiu] = CAPA_MODES[refl.mode]; };
+      const capaAplica = () => { [refl.actiu, sat.actiu] = capaM(refl.mode) || [false, false]; };
+      mod.cs = cs; mod.aplica = capaAplica;
       capaAplica();
       cs.addEventListener('change', e => {
         refl.mode = e.target.value; capaAplica();
         try{ localStorage.setItem(NOWC_LS_CAPA, refl.mode); }catch(_){}
-        reflMostra(); satMostra();
+        reflMostra(); satMostra(); modMostra();
       });
       so_.addEventListener('input', e => { sat.op = +e.target.value; try{ localStorage.setItem(NOWC_LS_SAT, JSON.stringify({ op: sat.op })); }catch(_){} if (sat.capa) sat.capa.setOpacity(sat.op / 100); });
       const mt = div.querySelector('#mov-toggle');
@@ -934,6 +950,8 @@ function initMap(){
     nowcMovMostra();
     reflMostra();
     satMostra();
+    if (ts) modSegueix(ts);
+    modMostra();
   }
 
   // Paleta sobria: blanc suau per a les cel·les que es mouen, gris per a les quasi quietes
@@ -1121,7 +1139,7 @@ function initMap(){
   // ---- Llegenda compartida: el mateix quadre (posició i lectura al passar el ratolí) que echotops ----
     const LX_SAT_LEG = () => `${SAT.url}?service=WMS&request=GetLegendGraphic&version=1.3.0&format=image/png&layer=${encodeURIComponent(SAT.capa)}&style=${encodeURIComponent(SAT.estil)}`;
   const LX_TXT0 = 'Passa el cursor pel mapa';
-  function legendaMode(){ return refl.actiu ? 'refl' : (refl.mode === 'sat' ? 'sat' : 'echo'); }
+  function legendaMode(){ return mod.sel ? 'mod' : (refl.actiu ? 'refl' : (refl.mode === 'sat' ? 'sat' : 'echo')); }
   function legendaX(){
     const lg = document.getElementById('legend'); if (!lg) return;
     let x = document.getElementById('legend-x');
@@ -1137,11 +1155,19 @@ function initMap(){
     const m = legendaMode();
     lg.classList.toggle('nx', m !== 'echo');
     x.style.display = m === 'echo' ? 'none' : 'block';
-    if (m === x.dataset.mode) return;
-    x.dataset.mode = m;
+    const clauL = m + (m === 'mod' ? ':' + mod.sel : '');
+    if (clauL === x.dataset.mode) return;
+    x.dataset.mode = clauL;
     const t = document.getElementById('lx-title'), b = document.getElementById('lx-body'), c = document.getElementById('lx-credit'), h = document.getElementById('lx-hover');
-    if (h){ h.textContent = LX_TXT0; h.style.display = m === 'refl' ? '' : 'none'; }
-    if (m === 'refl'){
+    if (h){ h.textContent = LX_TXT0; h.style.display = (m === 'refl' || m === 'mod') ? '' : 'none'; }
+    if (m === 'mod'){
+      const P = modPaleta(), M = mod.models[modK()] || {};
+      t.innerHTML = (M.nom || 'Model') + (mod.sel.endsWith(':h') ? ' · pluja horària <span style="text-transform:none">(mm/h)</span>' : ' · pluja acumulada <span style="text-transform:none">(mm)</span>');
+      b.innerHTML = '<div class="bands">' + P.map(([v, col]) => `<span style="background:${col}" title="≥ ${v}"></span>`).join('') + '</div>' +
+        '<div class="band-labels">' + P.map(([v, col], i) => i < P.length - 1 ? `<span style="left:${((i + 1) / P.length * 100).toFixed(2)}%">${P[i + 1][0]}</span>` : '').join('') + '</div>';
+      c.textContent = 'Model: ' + (M.nom || '') + (M.model === 'arome' ? ' (Météo-France)' : ' (SMC)');
+      if (h) h.style.display = '';
+    }else if (m === 'refl'){
       t.textContent = 'Reflectivitat radar (dBZ)';
       b.innerHTML = '<div class="bands">' + REFL_LLEGENDA.map(([col, v]) => `<span style="background:${col}" title="≥ ${v} dBZ"></span>`).join('') + '</div>' +
         '<div class="band-labels">' + REFL_LLEGENDA.map(([col, v], i) => (i % 2 === 0) ? `<span style="left:${((i + 0.5) / REFL_LLEGENDA.length * 100).toFixed(2)}%">${v}${i === REFL_LLEGENDA.length - 1 ? '+' : ''}</span>` : '').join('') + '</div>';
@@ -1177,12 +1203,12 @@ function initMap(){
     return k === REFL_LLEGENDA.length - 1 ? `Reflectivitat: ≥ ${lo} dBZ` : `Reflectivitat: ${lo}–${lo + 5} dBZ`;
   }
   map.on('mousemove', e => {
-    if (legendaMode() !== 'refl') return;
-    const el = document.getElementById('lx-hover'); if (el) el.textContent = reflValor(e.latlng);
+    const lm = legendaMode(); if (lm !== 'refl' && lm !== 'mod') return;
+    const el = document.getElementById('lx-hover'); if (el) el.textContent = lm === 'mod' ? modValor(e.latlng) : reflValor(e.latlng);
   });
   map.on('mouseout', () => { const el = document.getElementById('lx-hover'); if (el) el.textContent = LX_TXT0; });
   function reflExcl(){
-    const on = !!refl.overlay || refl.mode === 'sat';
+    const on = !!refl.overlay || refl.mode === 'sat' || mod.sel;
     if (typeof currentOverlay !== 'undefined' && currentOverlay) currentOverlay.setOpacity(on ? 0 : 0.85);
     legendaX();
   }
@@ -1228,6 +1254,157 @@ function initMap(){
   async function nowcCicle(){ await nowcCarrega(); nowcMostra(); nowcRevisaNoves(); }
   nowcCicle();
   nowc.timer = setInterval(nowcCicle, 2 * 60 * 1000);
+
+  // ---- Previsió: pluja horària i acumulada dels models (WRF-SMC, AROME) a partir de data/models/<model>/ ----
+  // precip_h.png és un sprite amb un pas horari per tile; cada píxel codifica la pluja horària en 16 bits (R alt, G baix; 65535 = sense dada).
+  // L'acumulat (des de l'inici o en finestres de 3-24 h) se suma aquí, sobre els passos horaris.
+  const MOD_PAL_H = [[0.1, 'rgb(170,215,255)'], [0.5, 'rgb(90,170,255)'], [1, 'rgb(0,150,230)'], [2, 'rgb(0,190,110)'], [4, 'rgb(140,210,0)'], [7, 'rgb(255,235,0)'],
+    [10, 'rgb(255,165,0)'], [20, 'rgb(240,60,20)'], [40, 'rgb(170,0,40)'], [70, 'rgb(200,0,170)'], [100, 'rgb(130,60,210)']];
+  const MOD_PAL_A = [[0.1, 'rgb(170,215,255)'], [1, 'rgb(90,170,255)'], [2, 'rgb(0,150,230)'], [5, 'rgb(0,190,110)'], [10, 'rgb(140,210,0)'], [20, 'rgb(255,235,0)'],
+    [30, 'rgb(255,165,0)'], [50, 'rgb(240,60,20)'], [75, 'rgb(170,0,40)'], [100, 'rgb(200,0,170)'], [150, 'rgb(130,60,210)']];
+  const modK = () => mod.sel ? mod.sel.split(':')[1] : null;
+  const modPaleta = () => (mod.sel && mod.sel.endsWith(':h')) ? MOD_PAL_H : MOD_PAL_A;
+  const modMs = M => Date.parse(M.run_utc);
+  const modMercY = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+  const modData = ms => new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(ms));
+
+  async function modRefresca(){
+    try{
+      const q = `?_=${Date.now()}`;
+      const idx = await fetch(`data/models/index.json${q}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+      const nous = {};
+      for (const e of idx.models){
+        try{ const m = await fetch(`data/models/${e.model}/meta.json${q}`).then(r => r.json()); nous[e.model] = m; }catch(_){}
+      }
+      mod.models = nous;
+    }catch(_){ mod.models = {}; }
+    const cs = mod.cs; if (!cs) return;
+    let og = cs.querySelector('optgroup[data-mod]');
+    if (og) og.remove();
+    const claus = Object.keys(mod.models);
+    if (claus.length){
+      og = document.createElement('optgroup'); og.label = 'Previsió (models)'; og.setAttribute('data-mod', '1');
+      claus.forEach(k => { const M = mod.models[k];
+        [['h', 'pluja horària'], ['a', 'pluja acumulada']].forEach(([t, nom]) => { const o = document.createElement('option'); o.value = `mod:${k}:${t}`; o.textContent = `${M.nom} · ${nom}`; og.appendChild(o); }); });
+      cs.appendChild(og);
+    }
+    if (mod.pendent){
+      const p = mod.pendent; mod.pendent = null;
+      if (cs.querySelector(`option[value="${p}"]`)){ refl.mode = p; cs.value = p; mod.aplica(); reflMostra(); satMostra(); modMostra(); return; }
+    }
+    if (mod.sel && !(modK() in mod.models)){ refl.mode = 'echo'; cs.value = 'echo'; mod.aplica(); reflMostra(); satMostra(); }
+    modMostra();
+  }
+
+  async function modCarrega(k){
+    const M = mod.models[k];
+    const clau = k + '@' + M.run_utc;
+    if (mod.cache[clau]) return mod.cache[clau];
+    const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = `data/models/${k}/${M.fitxer}?v=${encodeURIComponent(M.run_utc)}`; });
+    const cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height;
+    const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
+    const D = g.getImageData(0, 0, im.width, im.height).data;
+    const W = M.w, H = M.h, passos = [];
+    const pas = s => {                                         // Uint16Array (W*H) del pas s
+      if (passos[s]) return passos[s];
+      const a = new Uint16Array(W * H), c0 = (s % M.cols) * W, r0 = Math.floor(s / M.cols) * H;
+      for (let y = 0; y < H; y++){ let o = ((r0 + y) * im.width + c0) * 4; for (let x = 0; x < W; x++, o += 4) a[y * W + x] = (D[o] << 8) | D[o + 1]; }
+      return (passos[s] = a);
+    };
+    for (const kk of Object.keys(mod.cache)) if (kk.split('@')[0] === k) delete mod.cache[kk];
+    return (mod.cache[clau] = { M, pas, W, H });
+  }
+
+  // Camp (Float32Array, NaN = sense dada) del pas s: horari o acumulat a la finestra n (0 = des de l'inici)
+  function modCamp(C, s, hor, n){
+    const { M, pas, W, H } = C, out = new Float32Array(W * H), a0 = hor ? s : Math.max(1, n ? s - n + 1 : 1);
+    const ref = pas(s);
+    for (let i = 0; i < out.length; i++) out[i] = ref[i] === M.nodata ? NaN : 0;
+    for (let k = a0; k <= s; k++){ const a = pas(k); for (let i = 0; i < out.length; i++) if (!Number.isNaN(out[i])) out[i] += a[i] * M.escala; }
+    return out;
+  }
+
+  function modSegueix(ts){
+    if (!mod.sel) return;
+    const M = mod.models[modK()]; if (!M) return;
+    const ms = Math.round(nowcMs(ts.replace('_', '')) / 3600000) * 3600000, r0 = modMs(M);
+    if (ms >= r0 + 3600000 && ms <= r0 + (M.passos - 1) * 3600000) mod.t = ms;
+  }
+
+  async function modMostra(){
+    const tok = ++mod.token;
+    const ctl = document.getElementById('mod-ctl'), info = document.getElementById('mod-info');
+    const sel = refl.mode.indexOf('mod:') === 0 ? refl.mode : null;
+    const Mq = sel && mod.models[sel.split(':')[1]];
+    const clauR = Mq ? [sel, mod.t, mod.acum, Mq.run_utc].join('|') : null;
+    if (clauR && clauR === mod.clau && mod.overlay){ reflExcl(); return; }      // res no ha canviat
+    mod.clau = null;
+    if (mod.overlay){ map.removeLayer(mod.overlay); mod.overlay = null; }
+    mod.cur = null;
+    mod.sel = sel;
+    reflExcl();
+    if (!ctl) return;
+    ctl.style.display = sel ? 'block' : 'none';
+    if (!sel) return;
+    const [, k, tipus] = sel.split(':'), M = mod.models[k];
+    if (!M){ info.textContent = 'Model no disponible'; return; }
+    const hor = tipus === 'h', r0 = modMs(M), n = M.passos;
+    document.getElementById('mod-acum-row').style.display = hor ? 'none' : 'inline-flex';
+    const sl = document.getElementById('mod-t'); sl.max = n - 1;
+    const ara = Math.round(Date.now() / 3600000) * 3600000;
+    if (mod.t === null || mod.t === undefined) mod.t = ara;
+    mod.t = Math.min(Math.max(mod.t, r0 + 3600000), r0 + (n - 1) * 3600000);
+    const s = Math.round((mod.t - r0) / 3600000);
+    sl.value = s;
+    const rt = new Date(r0);
+    info.innerHTML = `<b>${M.nom}</b> · run ${String(rt.getUTCDate()).padStart(2, '0')}/${String(rt.getUTCMonth() + 1).padStart(2, '0')} ${String(rt.getUTCHours()).padStart(2, '0')} UTC<br>` +
+      `Vàlid: <b>${modData(mod.t)}</b> (local) · +${s} h`;
+    let C;
+    try{ C = await modCarrega(k); }catch(_){ if (tok === mod.token) info.innerHTML += '<br><b style="color:#C8102E">No s\'ha pogut carregar la previsió</b>'; return; }
+    if (tok !== mod.token) return;
+    const camp = modCamp(C, s, hor, mod.acum), pal = hor ? MOD_PAL_H : MOD_PAL_A;
+    const cv = document.createElement('canvas'); cv.width = C.W; cv.height = C.H;
+    const g = cv.getContext('2d'), im = g.createImageData(C.W, C.H), cols = pal.map(([v, c]) => [v, ...c.match(/\d+/g).map(Number)]);
+    for (let i = 0; i < camp.length; i++){
+      const v = camp[i]; if (!(v >= cols[0][0])) continue;
+      let q = 0; while (q + 1 < cols.length && v >= cols[q + 1][0]) q++;
+      im.data[i * 4] = cols[q][1]; im.data[i * 4 + 1] = cols[q][2]; im.data[i * 4 + 2] = cols[q][3]; im.data[i * 4 + 3] = 255;
+    }
+    g.putImageData(im, 0, 0);
+    mod.cur = { camp, W: C.W, H: C.H, b: M.bounds, hor, n: mod.acum };
+    mod.overlay = L.imageOverlay(cv.toDataURL('image/png'), M.bounds, { opacity: 0.8, interactive: false }).addTo(map);
+    mod.overlay.bringToBack();
+    mod.clau = [sel, mod.t, mod.acum, M.run_utc].join('|');
+    reflExcl();
+  }
+  function modValor(ll){
+    const C = mod.cur; if (!C) return 'Sense dades de valor per aquest instant';
+    const [[s, w], [n, e]] = C.b;
+    if (ll.lat < s || ll.lat > n || ll.lng < w || ll.lng > e) return 'Fora del domini del model';
+    const x = Math.min(C.W - 1, Math.max(0, Math.floor((ll.lng - w) / (e - w) * C.W)));
+    const y = Math.min(C.H - 1, Math.max(0, Math.floor((modMercY(n) - modMercY(ll.lat)) / (modMercY(n) - modMercY(s)) * C.H)));
+    const v = C.camp[y * C.W + x];
+    if (Number.isNaN(v)) return 'Fora del domini del model';
+    if (v < 0.05) return 'Sense pluja';
+    return C.hor ? `Pluja horària: ${v.toFixed(1)} mm/h` : `Pluja acumulada${C.n ? ' (' + C.n + ' h)' : ''}: ${v.toFixed(1)} mm`;
+  }
+  (function(){
+    const q = id => document.getElementById(id);
+    const ini = () => {
+      const sl = q('mod-t'); if (!sl) return setTimeout(ini, 200);
+      const canvia = s => { const m = mod.models[modK()]; if (!m) return; mod.t = modMs(m) + s * 3600000; modMostra(); };
+      sl.addEventListener('input', () => canvia(+sl.value));
+      q('mod-prev').addEventListener('click', () => canvia(+sl.value - 1));
+      q('mod-next').addEventListener('click', () => canvia(+sl.value + 1));
+      q('mod-ara').addEventListener('click', () => { mod.t = Math.round(Date.now() / 3600000) * 3600000; modMostra(); });
+      const ac = q('mod-acum');
+      try{ const v = localStorage.getItem('nowcast_modacum_v1'); if (v !== null && ac.querySelector(`option[value="${v}"]`)){ ac.value = v; mod.acum = +v; } }catch(_){}
+      ac.addEventListener('change', () => { mod.acum = +ac.value; try{ localStorage.setItem('nowcast_modacum_v1', ac.value); }catch(_){} modMostra(); });
+    };
+    ini();
+  })();
+  modRefresca();
+  setInterval(modRefresca, 15 * 60 * 1000);
 
   // ---- Exportació d'imatge: l'usuari tria l'àrea i es compon (a alta resolució) amb les capes actives i les seves llegendes ----
   const EXP = { actiu: false, bar: null, caixa: null, ocupat: false, net: null };
@@ -1416,6 +1593,7 @@ function initMap(){
       // --- quines capes estan actives
       const echoOn = typeof currentOverlay !== 'undefined' && currentOverlay && map.hasLayer(currentOverlay) && currentOverlay.options.opacity > 0;
       const reflOn = !!(refl.overlay && map.hasLayer(refl.overlay));
+      const modOn = !!(mod.sel && mod.overlay && map.hasLayer(mod.overlay) && mod.models[modK()]);
       const satOn = !!(sat.capa && map.hasLayer(sat.capa));
       const stormOn = !!(nowc.marcs && map.hasLayer(nowc.marcs) && nowc.marcs.getLayers().length);
       const base = Object.values(baseLayers).filter(l => map.hasLayer(l));
@@ -1446,7 +1624,7 @@ function initMap(){
           rect: (x, y) => { const a = P(map.unproject(L.point(x * 512, y * 512), zt)), b = P(map.unproject(L.point((x + 1) * 512, (y + 1) * 512), zt)); return [a[0], a[1], b[0] - a[0], b[1] - a[1]]; } });
       }
       expMissatge('<b>Generant imatge…</b> radar i tempestes');
-      for (const ov of [echoOn ? currentOverlay : null, reflOn ? refl.overlay : null]){
+      for (const ov of [echoOn ? currentOverlay : null, reflOn ? refl.overlay : null, modOn ? mod.overlay : null]){
         if (!ov) continue;
         const im = await expImg(ov._url);
         if (!im) continue;
@@ -1457,7 +1635,7 @@ function initMap(){
       ctx.restore();
       ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = Math.max(1, u); ctx.strokeRect(mx, my, MW, MH);
 
-      const TS = expTs(), ms = nowcMs(TS.replace('_', ''));
+      const TS = expTs(), MM = modOn ? mod.models[modK()] : null, ms = modOn ? mod.t : nowcMs(TS.replace('_', ''));
       const dl = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(ms));
       const dUtc = nowcClau(ms).slice(8, 10) + ':' + nowcClau(ms).slice(10, 12) + ' UTC';
 
@@ -1474,21 +1652,28 @@ function initMap(){
           if (li){ const h = Math.min(22 * u, w * li.height / li.width), ww = h * li.width / li.height; ctx.drawImage(li, x, y + 13 * u, Math.min(w, ww), h); }
         } });
       }
+      if (modOn){
+        const P = modPaleta(), hor = mod.sel.endsWith(':h');
+        blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, `${MM.nom.toUpperCase()} · ${hor ? 'PLUJA HORÀRIA (mm/h)' : 'PLUJA ACUMULADA' + (mod.acum ? ' ' + mod.acum + ' h' : ' DES DE L\'INICI') + ' (mm)'}`,
+          P.map(q => q[1]), P.map((q, i) => i < P.length - 1 ? String(P[i + 1][0]) : ''), 'frontera') });
+      }
       blocs.push({ w: 2.4, f: (x, y, w) => {
-        ctx.fillStyle = '#52606d'; ctx.font = `600 ${9.5 * u}px ${EXP_FONT}`; ctx.textBaseline = 'middle'; ctx.fillText('DATA I HORA', x, y + 5 * u);
+        ctx.fillStyle = '#52606d'; ctx.font = `600 ${9.5 * u}px ${EXP_FONT}`; ctx.textBaseline = 'middle'; ctx.fillText(modOn ? 'PREVISIÓ VÀLIDA' : 'DATA I HORA', x, y + 5 * u);
         const hh = nowcHoraLocal(ms);
         ctx.fillStyle = '#243b53'; ctx.font = `600 ${13 * u}px ${EXP_MONO}`; ctx.fillText(dl, x, y + 24 * u);
         const w1 = ctx.measureText(dl).width;
         ctx.font = `700 ${19 * u}px ${EXP_MONO}`; ctx.fillStyle = '#C8102E'; ctx.fillText(hh, x + w1 + 10 * u, y + 24 * u);
         const w2 = ctx.measureText(hh).width;
         ctx.fillStyle = '#7b8794'; ctx.font = `500 ${10 * u}px ${EXP_MONO}`; ctx.fillText('local · ' + dUtc, x + w1 + w2 + 20 * u, y + 25 * u);
+        if (modOn){ const rt = new Date(modMs(MM)); ctx.fillStyle = '#52606d'; ctx.font = `500 ${9.5 * u}px ${EXP_FONT}`;
+          ctx.fillText(`${MM.nom} · run ${String(rt.getUTCDate()).padStart(2, '0')}/${String(rt.getUTCMonth() + 1).padStart(2, '0')} ${String(rt.getUTCHours()).padStart(2, '0')} UTC · +${Math.round((mod.t - modMs(MM)) / 3600000)} h`, x, y + 40 * u); }
       } });
       const tot = blocs.reduce((s, b) => s + b.w, 0), pad = 18 * u, gap = 26 * u;
       let cx = pad; const util = Wc - 2 * pad - gap * Math.max(0, blocs.length - 1);
       blocs.forEach(b => { const w = Math.min(util * b.w / tot, 520 * u); b.f(cx, fy + 7 * u, w); cx += w + gap; });
       ctx.fillStyle = '#7b8794'; ctx.font = `400 ${9 * u}px ${EXP_FONT}`; ctx.textAlign = 'left';
-      const cred = ['Meteocat', 'AEMET'].filter((_, i) => (i === 0 ? echoOn : reflOn || stormOn)).join(' · ');
-      const txtCred = `Dades: ${cred}${satOn ? (cred ? ' · ' : '') + '© EUMETSAT' : ''}  |  Mapa base: ${base.length ? (currentBase === 'satelit' ? 'Esri' : currentBase === 'topo' ? '© OpenTopoMap · OSM' : '© CARTO · © OpenStreetMap') : ''}`;
+      const cred = [echoOn ? 'Meteocat' : '', (reflOn || stormOn) ? 'AEMET' : '', satOn ? '© EUMETSAT' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
+      const txtCred = `Dades: ${cred}  |  Mapa base: ${base.length ? (currentBase === 'satelit' ? 'Esri' : currentBase === 'topo' ? '© OpenTopoMap · OSM' : '© CARTO · © OpenStreetMap') : ''}`;
       ctx.fillText(txtCred, pad, fy + FH - 8 * u);
       if (totBase && fallBase > totBase * 0.2) { ctx.textAlign = 'right'; ctx.fillStyle = '#C8102E'; ctx.fillText('Atenció: part del mapa base no s\'ha pogut carregar', Wc - pad, fy + FH - 8 * u); }
 
@@ -1496,7 +1681,7 @@ function initMap(){
       const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
       if (!blob) throw new Error('canvas buit');
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = `echotops_${TS.replace('_', '')}Z${satOn ? '_sat' : ''}${reflOn ? '_refl' : ''}.png`;
+      a.download = modOn ? `${modK()}_${mod.sel.endsWith(':h') ? 'pluja_h' : 'pluja_acum'}_${nowcClau(ms)}Z.png` : `echotops_${TS.replace('_', '')}Z${satOn ? '_sat' : ''}${reflOn ? '_refl' : ''}.png`;
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
       expMissatge(`✓ <b>Imatge descarregada</b> (${cv.width}×${cv.height} px)`);
       setTimeout(() => { if (EXP.actiu) expAtura(); }, 1800);
