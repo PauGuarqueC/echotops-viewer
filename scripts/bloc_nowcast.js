@@ -924,6 +924,7 @@
         border:1px solid var(--panel-border, #ccc); border-radius:3px; box-shadow:0 2px 10px rgba(0,0,0,.3); padding:8px 10px; font:13px/1.3 var(--font-ui, sans-serif);
         display:flex; align-items:center; gap:10px; flex-wrap:wrap; max-width:calc(100vw - 16px); }
       #exp-bar b{ font-weight:600; }
+      #exp-bar select{ font:inherit; font-size:12px; padding:4px 6px; border:1px solid var(--panel-border, #ccc); background:#fff; color:inherit; border-radius:3px; }
       #exp-bar button{ font:inherit; font-size:12px; padding:5px 10px; border:1px solid var(--panel-border, #ccc); background:#fff; color:inherit; border-radius:3px; cursor:pointer; }
       #exp-bar button:hover{ border-color:#C8102E; color:#C8102E; }
       #exp-caixa{ position:absolute; z-index:1200; border:2px solid #fff; outline:1px solid rgba(0,0,0,.6); box-shadow:0 0 0 9999px rgba(8,12,18,.45); pointer-events:none; }
@@ -949,15 +950,24 @@
     map.dragging.disable(); map.doubleClickZoom.disable();
     const cont = map.getContainer(); cont.classList.add('exp-sel');
     const bar = document.createElement('div'); bar.id = 'exp-bar';
+    const modo = expModActiu();
+    EXP.fmt = 'png';
     bar.innerHTML = '<span class="exp-t"><b>Exporta imatge</b> · arrossega sobre el mapa per triar l\'àrea</span>' +
-      '<button data-a="tot">Tot el mapa visible</button><button data-a="gif">GIF…</button><button data-a="no">Cancel·la</button>';
+      '<select id="exp-fmt" title="Format"><option value="png">Imatge (PNG)</option><option value="gif">GIF animat</option></select>' +
+      '<select id="exp-rang" style="display:none" title="Durada">' + (modo
+        ? [6, 12, 24, 48].map(h => `<option value="${h}"${h === 12 ? ' selected' : ''}>Següents ${h} h</option>`).join('')
+        : [1, 2, 3, 6].map(h => `<option value="${h}"${h === 3 ? ' selected' : ''}>Últimes ${h} h</option>`).join('')) + '</select>' +
+      '<button data-a="tot">Tot el mapa visible</button><button data-a="no">Cancel·la</button>';
     document.body.appendChild(bar); EXP.bar = bar;
     L.DomEvent.disableClickPropagation(bar);
+    bar.querySelector('#exp-fmt').addEventListener('change', e => {
+      EXP.fmt = e.target.value; bar.querySelector('#exp-rang').style.display = EXP.fmt === 'gif' ? '' : 'none';
+      bar.querySelector('.exp-t').innerHTML = EXP.fmt === 'gif' ? '<b>Exporta GIF</b> · arrossega sobre el mapa per triar l\'àrea' : '<b>Exporta imatge</b> · arrossega sobre el mapa per triar l\'àrea';
+    });
     bar.addEventListener('click', e => {
       const a = e.target.dataset && e.target.dataset.a; if (!a || EXP.ocupat) return;
       if (a === 'no') expAtura();
       else if (a === 'tot'){ const s = map.getSize(); expGenera(0, 0, s.x, s.y); }
-      else if (a === 'gif'){ expAtura(); const o = document.getElementById('export-overlay'); if (o) o.classList.add('visible'); if (btn) btn.classList.add('active'); }
     });
     let ini = null;
     const pt = e => { const r = cont.getBoundingClientRect(); return [Math.min(Math.max(e.clientX - r.left, 0), r.width), Math.min(Math.max(e.clientY - r.top, 0), r.height)]; };
@@ -997,7 +1007,8 @@
     const btn = document.getElementById('export-btn'); if (btn) btn.classList.remove('active');
   }
 
-  const expImg = url => new Promise(res => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
+  const expImg0 = url => new Promise(res => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
+  const expImg = url => { if (!EXP.cache) return expImg0(url); if (!EXP.cache.has(url)) EXP.cache.set(url, expImg0(url)); return EXP.cache.get(url); };
   async function expPool(items, n, fn){ let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length){ await fn(items[i++]); } })); }
 
   // Capa de tessel·les (mapa base o satèl·lit): només es demanen les que cauen dins l'àrea
@@ -1080,14 +1091,12 @@
     });
   }
 
-  async function expGenera(x0, y0, x1, y1){
-    if (EXP.ocupat) return;
-    EXP.ocupat = true;
-    if (!EXP.caixa){ EXP.caixa = document.createElement('div'); EXP.caixa.id = 'exp-caixa'; map.getContainer().appendChild(EXP.caixa); }
-    Object.assign(EXP.caixa.style, { left: x0 + 'px', top: y0 + 'px', width: (x1 - x0) + 'px', height: (y1 - y0) + 'px' });
-    try{
+  // Compon la imatge (mapa + capes actives + peu amb llegendes) segons l'estat actual del visor. Retorna el canvas.
+  async function expCompon(x0, y0, x1, y1, opt){
+    opt = opt || {}; const LL = opt.llarg || EXP_LLARG, AMPLE = opt.ample || 1500;
+    {
       const selW = x1 - x0, selH = y1 - y0;
-      const k = Math.min(8, Math.max(1, EXP_LLARG / Math.max(selW, selH)));
+      const k = Math.min(8, Math.max(1, LL / Math.max(selW, selH)));
       const MW = Math.round(selW * k), MH = Math.round(selH * k);
       const Zf = map.getZoom() + Math.log2(k);
       const nw = map.containerPointToLatLng([x0, y0]), se = map.containerPointToLatLng([x1, y1]);
@@ -1103,7 +1112,7 @@
       const base = Object.values(baseLayers).filter(l => map.hasLayer(l));
 
       // --- peus i capçalera: dimensions segons l'amplada final
-      const Wc = Math.max(MW, 1500), u = Wc / 1000, HH = 0, FH = Math.round(60 * u);
+      const Wc = Math.max(MW, AMPLE), u = Wc / 1000, HH = 0, FH = Math.round(60 * u);
       const cv = document.createElement('canvas'); cv.width = Wc; cv.height = HH + MH + FH;
       const ctx = cv.getContext('2d'); ctx.imageSmoothingQuality = 'high';
       ctx.fillStyle = '#e9ecef'; ctx.fillRect(0, 0, cv.width, cv.height);
@@ -1112,7 +1121,7 @@
       // --- mapa
       ctx.save(); ctx.beginPath(); ctx.rect(mx, my, MW, MH); ctx.clip(); ctx.translate(mx, my);
       ctx.fillStyle = '#cfd6dd'; ctx.fillRect(0, 0, MW, MH);
-      let prog = (n, t) => expMissatge(`<b>Generant imatge…</b> ${n} / ${t} tessel·les`);
+      let prog = opt.prog || ((n, t) => expMissatge(`<b>Generant imatge…</b> ${n} / ${t} tessel·les`));
       let fallBase = 0, totBase = 0;
       for (const l of base){
         const zt = Math.min(l.options.maxZoom || 12, Math.round(Zf)), sc = Math.pow(2, Zf - zt);
@@ -1127,7 +1136,7 @@
           url: (x, y) => sat.capa.getTileUrl(Object.assign(L.point(x, y), { z: zt })),
           rect: (x, y) => { const a = P(map.unproject(L.point(x * 512, y * 512), zt)), b = P(map.unproject(L.point((x + 1) * 512, (y + 1) * 512), zt)); return [a[0], a[1], b[0] - a[0], b[1] - a[1]]; } });
       }
-      expMissatge('<b>Generant imatge…</b> radar i tempestes');
+      if (!opt.sil) expMissatge('<b>Generant imatge…</b> radar i tempestes');
       for (const ov of [echoOn ? currentOverlay : null, reflOn ? refl.overlay : null, modOn ? mod.overlay : null]){
         if (!ov) continue;
         const im = await expImg(ov._url);
@@ -1181,19 +1190,88 @@
       ctx.fillText(txtCred, pad, fy + FH - 8 * u);
       if (totBase && fallBase > totBase * 0.2) { ctx.textAlign = 'right'; ctx.fillStyle = '#C8102E'; ctx.fillText('Atenció: part del mapa base no s\'ha pogut carregar', Wc - pad, fy + FH - 8 * u); }
 
+      const nomBase = modOn ? `${modK()}_${mod.sel.endsWith(':h') ? 'pluja_h' : 'pluja_acum'}` : `echotops${satOn ? '_sat' : ''}${reflOn ? '_refl' : ''}`;
+      return { cv, ms, TS, modOn, nomBase, clauMs: nowcClau(ms) };
+    }
+  }
+
+  async function expGenera(x0, y0, x1, y1){
+    if (EXP.ocupat) return;
+    EXP.ocupat = true;
+    if (!EXP.caixa){ EXP.caixa = document.createElement('div'); EXP.caixa.id = 'exp-caixa'; map.getContainer().appendChild(EXP.caixa); }
+    Object.assign(EXP.caixa.style, { left: x0 + 'px', top: y0 + 'px', width: (x1 - x0) + 'px', height: (y1 - y0) + 'px' });
+    try{
+      if (EXP.fmt === 'gif'){ await expGif(x0, y0, x1, y1); return; }
+      const r = await expCompon(x0, y0, x1, y1);
       expMissatge('<b>Desant…</b>');
-      const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+      const blob = await new Promise(res => r.cv.toBlob(res, 'image/png'));
       if (!blob) throw new Error('canvas buit');
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = modOn ? `${modK()}_${mod.sel.endsWith(':h') ? 'pluja_h' : 'pluja_acum'}_${nowcClau(ms)}Z.png` : `echotops_${TS.replace('_', '')}Z${satOn ? '_sat' : ''}${reflOn ? '_refl' : ''}.png`;
-      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
-      expMissatge(`✓ <b>Imatge descarregada</b> (${cv.width}×${cv.height} px)`);
+      expDesa(blob, r.modOn ? `${r.nomBase}_${r.clauMs}Z.png` : `${r.nomBase.replace('echotops', 'echotops_' + r.TS.replace('_', '') + 'Z')}.png`);
+      expMissatge(`✓ <b>Imatge descarregada</b> (${r.cv.width}×${r.cv.height} px)`);
       setTimeout(() => { if (EXP.actiu) expAtura(); }, 1800);
     }catch(err){
       console.error(err);
       expMissatge('<b style="color:#C8102E">No s\'ha pogut generar la imatge.</b> ' + (err && err.message ? err.message : ''));
       EXP.ocupat = false;
       if (EXP.caixa){ EXP.caixa.remove(); EXP.caixa = null; }
+    }
+  }
+  function expDesa(blob, nom){
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+  }
+
+  // ---- GIF animat: mateixa composició que la imatge, un fotograma per instant ----
+  const EXP_GIF_MAX = 72;
+  const expModActiu = () => !!(mod.sel && mod.overlay && map.hasLayer(mod.overlay) && mod.models[modK()]);
+  async function expGif(x0, y0, x1, y1){
+    const modo = expModActiu(), n = +(EXP.bar.querySelector('#exp-rang').value) || 3;
+    expMissatge('<b>GIF…</b> carregant el codificador');
+    const resp = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
+    if (!resp.ok) throw new Error('no s\'ha pogut carregar el codificador de GIF');
+    const wUrl = URL.createObjectURL(await resp.blob());
+    const sig = () => [typeof currentOverlay !== 'undefined' && currentOverlay ? currentOverlay._url : '', refl.overlay ? refl.overlay._url : '', sat.capa ? 1 : 0, nowc.ts || ''].join('|');
+    const espera = async () => { let a = sig(), est = 0; for (let i = 0; i < 40 && est < 2; i++){ await new Promise(r => setTimeout(r, 150)); const b = sig(); est = b === a ? est + 1 : 0; a = b; } };
+    EXP.cache = new Map();
+    const restaura = [];
+    let gif = null, nFot = 0, nom = 'animacio';
+    try{
+      const frames = [];                                                  // funcions que posen el visor a cada instant
+      if (modo){
+        const m = mod.models[modK()], t0 = mod.t, ini = modMs(m), fi = ini + (m.passos - 1) * 3600000, orig = mod.t;
+        for (let t = t0; t <= Math.min(fi, t0 + n * 3600000); t += 3600000) frames.push(async () => { mod.t = t; await modMostra(); });
+        restaura.push(async () => { mod.t = orig; await modMostra(); });
+      }else{
+        const vt = visibleTimestamps, i1 = vt.indexOf(currentTs), orig = i1;
+        if (i1 < 0) throw new Error('no hi ha cap fotograma seleccionat');
+        const t1 = tsToDate(vt[i1]).getTime();
+        for (let i = 0; i <= i1; i++) if (t1 - tsToDate(vt[i]).getTime() <= n * 3600000) frames.push(async () => { showFrame(i); await espera(); });
+        restaura.push(async () => { showFrame(orig); });
+      }
+      let last = null, prev = null, dl = modo ? 500 : 250;
+      for (let i = 0; i < frames.length && nFot < EXP_GIF_MAX; i++){
+        expMissatge(`<b>Generant GIF…</b> fotograma ${i + 1} / ${frames.length}`);
+        await frames[i]();
+        const sg = sig() + '|' + (modo ? mod.t : '');
+        if (sg === prev) continue; prev = sg;
+        const r = await expCompon(x0, y0, x1, y1, { llarg: 1100, ample: 1100, sil: true, prog: () => {} });
+        if (!gif) gif = new GIF({ workers: 3, quality: 10, width: r.cv.width, height: r.cv.height, workerScript: wUrl });
+        if (last) last.delay = dl;
+        last = { delay: dl };
+        gif.addFrame(r.cv, { copy: true, delay: dl }); if (!nFot) nom = r.nomBase; nFot++;
+        if (nFot === 1) EXP.gif0 = r.clauMs; EXP.gif1 = r.clauMs;
+        EXP.ultim = r;
+      }
+      if (nFot < 2) throw new Error('hi ha menys de 2 fotogrames en aquest rang');
+      gif.frames[gif.frames.length - 1].delay = 1500;                       // pausa al final
+      expMissatge('<b>Codificant el GIF…</b> pot trigar una mica');
+      const blob = await new Promise((res, rej) => { gif.on('finished', res); gif.on('abort', () => rej(new Error('codificació interrompuda'))); gif.render(); });
+      expDesa(blob, `${nom}_${EXP.gif0}-${EXP.gif1}Z.gif`);
+      expMissatge(`✓ <b>GIF descarregat</b> (${nFot} fotogrames, ${(blob.size / 1048576).toFixed(1)} MB)`);
+      setTimeout(() => { if (EXP.actiu) expAtura(); }, 2200);
+    }finally{
+      for (const f of restaura) try{ await f(); }catch(_){}
+      EXP.cache = null; URL.revokeObjectURL(wUrl);
     }
   }
   // Barra de colors amb etiquetes (a la frontera entre bandes o al centre de cada banda)
