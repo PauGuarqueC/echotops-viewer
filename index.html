@@ -520,7 +520,25 @@ function initMap(){
       #nowc-avisos .nowc-av .x:hover{ opacity:1; }
       #nowc-avisos .nowc-av .cap{ cursor:pointer; padding-right:18px; }
       #nowc-avisos .nowc-tot{ align-self:flex-end; font-size:11px; background:var(--panel); color:var(--text); border:1px solid var(--panel-border); border-radius:3px; padding:3px 8px; cursor:pointer; }
-      @media (max-width:640px){ #nowc-avisos{ top:76px; right:8px; width:min(250px, calc(100vw - 16px)); max-height:40vh; } }`;
+      .nowc-ctl{ width:230px; color:var(--text); font-size:12px; }
+      .nowc-ctl .nowc-cap{ display:none; cursor:pointer; font-weight:600; align-items:center; justify-content:space-between; gap:8px; }
+      @media (max-width:640px){
+        #nowc-avisos{ top:76px; right:8px; left:8px; width:auto; max-width:280px; margin-left:auto; max-height:34vh; gap:6px; }
+        #nowc-avisos .nowc-av{ font-size:11px; line-height:1.3; padding:6px 8px; }
+        #nowc-avisos .nowc-av .x{ font-size:20px; padding:4px 8px; top:0; right:0; }
+        html, body{ overflow-x:hidden; }
+        #topbar{ flex-direction:column; align-items:stretch; gap:6px; padding:8px 10px; }
+        #topbar .brand{ gap:4px 8px; }
+        #topbar .brand .mark{ font-size:10px; padding:2px 6px; }
+        #topbar .subtitle{ display:none; }
+        #status{ flex-wrap:wrap; gap:6px; padding:5px 8px; font-size:11px; }
+        #status button{ margin-left:0 !important; font-size:11px; padding:5px 8px; }
+        .nowc-ctl{ width:min(230px, calc(100vw - 24px)); font-size:13px; }
+        .nowc-ctl .nowc-cap{ display:flex; }
+        .nowc-ctl.col .nowc-body{ display:none; }
+        .nowc-ctl:not(.col) .nowc-cap{ margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--panel-border); }
+        .nowc-ctl input[type=checkbox]{ width:18px; height:18px; }
+      }`;
     document.head.appendChild(st);
     const c = document.createElement('div');
     c.id = 'nowc-avisos';
@@ -635,8 +653,8 @@ function initMap(){
     options: { position: 'bottomleft' },
     onAdd: function(){
       const div = L.DomUtil.create('div', 'basemap-control');
-      div.style.cssText = 'width:230px;color:var(--text);font-size:12px;';
-      div.innerHTML = `
+      div.className += ' nowc-ctl';
+      div.innerHTML = `<div class="nowc-cap"><span>Tempestes enganxades</span><span class="nowc-fl">▾</span></div><div class="nowc-body">
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;">
           <input type="checkbox" id="nowc-toggle" checked style="margin-top:2px"> <span><b>Tempestes enganxades</b> (radar AEMET)</span>
         </label>
@@ -648,7 +666,12 @@ function initMap(){
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
           <input type="checkbox" id="refl-toggle" style="margin-top:2px"> <span>Reflectivitat radar (AEMET) <i style="opacity:.7">— substitueix els echotops</i></span>
         </label>
-        <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>`;
+        <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div></div>`;
+      const cap = div.querySelector('.nowc-cap');
+      const fl = div.querySelector('.nowc-fl');
+      const plega = c => { div.classList.toggle('col', c); fl.textContent = c ? '▴' : '▾'; nowcAjustaMobil(); };
+      cap.addEventListener('click', () => plega(!div.classList.contains('col')));
+      if (window.matchMedia('(max-width:640px)').matches) plega(true);
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
       div.querySelector('#nowc-toggle').addEventListener('change', e => nowcActiva(e.target.checked));
@@ -661,6 +684,21 @@ function initMap(){
     },
   });
   map.addControl(new NowcastControl());
+
+  // Mòbil: alça els controls inferiors per damunt de la barra de temps i baixa els avisos sota la capçalera
+  function nowcAjustaMobil(){
+    const mobil = window.matchMedia('(max-width:640px)').matches;
+    const bl = document.querySelector('.leaflet-bottom.leaflet-left');
+    const tl = document.getElementById('timeline-wrap');
+    if (bl) bl.style.marginBottom = (mobil && tl) ? (tl.offsetHeight + 4) + 'px' : '';
+    const av = document.getElementById('nowc-avisos');
+    const tb = document.getElementById('topbar');
+    if (av) av.style.top = (mobil && tb) ? (tb.offsetHeight + 8) + 'px' : '';
+  }
+  nowcAjustaMobil();
+  window.addEventListener('resize', nowcAjustaMobil);
+  window.addEventListener('orientationchange', nowcAjustaMobil);
+  setTimeout(nowcAjustaMobil, 500);
 
   async function nowcCarrega(){
     try{
