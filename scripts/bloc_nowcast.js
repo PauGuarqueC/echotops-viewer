@@ -32,8 +32,18 @@
       #nowc-avisos .nowc-av .x:hover{ opacity:1; }
       #nowc-avisos .nowc-av .cap{ cursor:pointer; padding-right:18px; }
       #nowc-avisos .nowc-tot{ align-self:flex-end; font-size:11px; background:var(--panel); color:var(--text); border:1px solid var(--panel-border); border-radius:3px; padding:3px 8px; cursor:pointer; }
-      .nowc-fletxa{ background:none; border:0; }
-      .nowc-fletxa div{ font-size:20px; line-height:20px; width:20px; height:20px; text-align:center; color:#fff; text-shadow:0 0 3px #000, 0 0 3px #000, 0 0 6px #000; }
+      .nowc-mv{ background:none; border:0; }
+      .nowc-mv .nowc-svg{ position:absolute; left:0; top:0; pointer-events:none; filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.45)); }
+      .nowc-mv .nowc-dot{ position:absolute; left:19px; top:19px; width:10px; height:10px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(11,19,32,.6), 0 1px 4px rgba(0,0,0,.5); box-sizing:border-box; }
+      .nowc-mv .nowc-pill{ position:absolute; left:34px; top:28px; white-space:nowrap; font:600 10.5px/1 var(--font-mono, monospace); color:#fff;
+        background:rgba(11,19,32,.82); border:1px solid rgba(255,255,255,.28); border-radius:9px; padding:3px 6px; box-shadow:0 1px 4px rgba(0,0,0,.4); pointer-events:none; }
+      .nowc-zoom-baix .nowc-mv .nowc-pill{ display:none; }
+      .nowc-tk{ background:none; border:0; }
+      .nowc-tk .nowc-tk-t{ position:absolute; transform:translate(-50%, 6px); font:600 9.5px/1 var(--font-mono, monospace); color:#fff; white-space:nowrap;
+        text-shadow:0 0 3px #000, 0 0 3px #000, 0 0 5px #000; pointer-events:none; }
+      .nowc-pop-v{ font-size:18px; font-weight:700; line-height:1.2; }
+      .nowc-pop-v span{ font-size:12px; font-weight:500; opacity:.65; }
+      .nowc-pop-s{ font-size:11.5px; opacity:.65; margin-top:2px; }
       .nowc-ctl{ width:230px; color:var(--text); font-size:12px; }
       .nowc-ctl .nowc-cap{ display:none; cursor:pointer; font-weight:600; align-items:center; justify-content:space-between; gap:8px; }
       @media (max-width:640px){
@@ -67,7 +77,7 @@
   function nowcDurada(min){
     return min >= 60 ? `${Math.floor(min / 60)} h${min % 60 ? ' ' + (min % 60) + ' min' : ''}` : `${min} min`;
   }
-  const nowcHoraLocal = ms => new Date(ms).toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
+  const nowcHoraLocal = ms => new Date(ms).toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Madrid' });
 
   const NOWC_RUMBS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
   const nowcRumbTxt = g => NOWC_RUMBS[Math.round(g / 45) % 8];
@@ -208,7 +218,7 @@
         </label>
         <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
-          <input type="checkbox" id="mov-toggle" style="margin-top:2px"> <span>Moviment (rastre 1 h i velocitat)</span>
+          <input type="checkbox" id="mov-toggle" style="margin-top:2px"> <span>Moviment (rastre i velocitat)</span>
         </label>
         <div id="mov-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div></div>`;
       const cap = div.querySelector('.nowc-cap');
@@ -242,6 +252,8 @@
     const tb = document.getElementById('topbar');
     if (av) av.style.top = (mobil && tb) ? (tb.offsetHeight + 8) + 'px' : '';
   }
+  const nowcZoom = () => map.getContainer().classList.toggle('nowc-zoom-baix', map.getZoom() < 8);
+  map.on('zoomend', nowcZoom); nowcZoom();
   nowcAjustaMobil();
   window.addEventListener('resize', nowcAjustaMobil);
   window.addEventListener('orientationchange', nowcAjustaMobil);
@@ -279,6 +291,9 @@
     reflMostra();
   }
 
+  // Paleta sobria: blanc suau per a les cel·les que es mouen, gris per a les quasi quietes
+  const NOWC_MOV_COL = '#f1f3f5', NOWC_MOV_COL_LENT = '#8f9ba7';
+  const nowcMovCol = vel => (vel === null || vel === undefined || vel < 8) ? NOWC_MOV_COL_LENT : NOWC_MOV_COL;
   // Moviment de totes les cel·les intenses: rastre (última hora), fletxa de direcció i velocitat
   function nowcMovMostra(){
     nowc.movCapa.clearLayers();
@@ -301,30 +316,67 @@
     if (!fr){ info.textContent = `Sense dades de moviment per a les ${nowcHoraLocal(ms)}`; return; }
     const idx = {};
     const pos = i => { const k = nowcClau(ms - i * pas); if (!(k in idx)) idx[k] = D.frames[k] ? Object.fromEntries(D.frames[k].map(r => [r[0], r])) : null; return idx[k]; };
+    const pasMin = D.pas_min || 10;
+    const NOWC_RASTRE_MIN = 180;                 // longitud màxima del rastre (mentre la cel·la es pugui seguir)
     fr.forEach(r => {
       const [id, lat, lon, vel, rumb] = r;
-      const pts = [];
-      for (let i = 6; i >= 0; i--){ const p = pos(i); if (p && p[id]) pts.push([p[id][1], p[id][2]]); }
-      if (pts.length >= 2){
-        L.polyline(pts, { color: '#000', weight: 4, opacity: 0.35, interactive: false }).addTo(nowc.movCapa);
-        L.polyline(pts, { color: '#fff', weight: 2, opacity: 0.9, interactive: false }).addTo(nowc.movCapa);
+      const col = nowcMovCol(vel);
+      // posicions de l'última hora (de la més antiga a la més recent) i suavitzat [1 2 1]/4 per treure el soroll del centroide
+      let pts = [];
+      // de la posició actual cap enrere; es talla si hi ha un salt irreal (canvi d'identitat de la cel·la en fusions/divisions)
+      let forats = 0;
+      for (let i = 0; i <= NOWC_RASTRE_MIN / pasMin; i++){
+        const p = pos(i); if (!(p && p[id])) { if (++forats > 3) break; continue; }
+        forats = 0;
+        const q = [p[id][1], p[id][2]], ult = pts[pts.length - 1];
+        if (ult && Math.hypot(q[0] - ult[0], (q[1] - ult[1]) * 0.75) > 0.2) break;
+        pts.push(q);
       }
-      const txt = `Moviment: ${nowcMovTxt(vel, rumb)}<br><span style="opacity:.7">Rastre dels últims ${Math.max(0, pts.length - 1) * (D.pas_min || 10)} min</span>`;
-      const obre = (e) => { if (typeof pickingCenter !== 'undefined' && pickingCenter) return;
-        L.popup({ maxWidth: 260 }).setLatLng([lat, lon]).setContent(txt).openOn(map); };
-      let m;
-      if (vel !== null && vel >= 8){
-        m = L.marker([lat, lon], { icon: L.divIcon({ className: 'nowc-fletxa', iconSize: [20, 20], iconAnchor: [10, 10],
-          html: `<div style="transform:rotate(${rumb}deg)">▲</div>` }), keyboard: false });
-      }else{
-        m = L.circleMarker([lat, lon], { radius: 4, color: '#fff', weight: 1.5, fillColor: '#888', fillOpacity: 0.9 });
+      pts.reverse();
+      if (pts.length >= 3){
+        const sm = pts.map((p, q) => (q === 0 || q === pts.length - 1) ? p :
+          [(pts[q - 1][0] + 2 * p[0] + pts[q + 1][0]) / 4, (pts[q - 1][1] + 2 * p[1] + pts[q + 1][1]) / 4]);
+        pts = sm;
       }
-      m.on('click', obre);
+      const nseg = pts.length - 1;
+      // rastre: segments que es van esvaint cap al passat, amb contorn fosc per llegir-se sobre qualsevol mapa
+      for (let q = 1; q <= nseg; q++){
+        const f = q / nseg, seg = [pts[q - 1], pts[q]];
+        L.polyline(seg, { color: '#0b1320', weight: 2.5 + 3 * f, opacity: 0.12 + 0.35 * f, lineCap: 'round', interactive: false }).addTo(nowc.movCapa);
+        L.polyline(seg, { color: col, weight: 1.2 + 2.2 * f, opacity: 0.2 + 0.75 * f, lineCap: 'round', interactive: false }).addTo(nowc.movCapa);
+      }
+      // marques de temps cada 10 min i etiqueta a l'extrem més antic
+      for (let q = 0; q < nseg; q++){
+        L.circleMarker(pts[q], { radius: 1.4 + 1.2 * (q / Math.max(1, nseg)), color: '#0b1320', weight: 0.6, fillColor: col, fillOpacity: 0.85, opacity: 0.8, interactive: false }).addTo(nowc.movCapa);
+      }
+      for (let q = 0; q < nseg; q++){            // etiquetes cada hora i a l'extrem més antic (si passa de 30 min)
+        const min = (nseg - q) * pasMin;
+        if (min % 60 === 0 || (q === 0 && min >= 30)){
+          L.marker(pts[q], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'nowc-tk', iconSize: [0, 0],
+            html: `<span class="nowc-tk-t">−${min % 60 === 0 ? (min / 60) + ' h' : min + '′'}</span>` }) }).addTo(nowc.movCapa);
+        }
+      }
+      // cap de la cel·la: fletxa orientada + etiqueta de velocitat
+      const mou = vel !== null && vel >= 8;
+      const pill = vel === null ? '' : `<span class="nowc-pill">${vel < 8 ? 'quasi quieta' : vel + ' km/h'}</span>`;
+      const fletxa = mou ? `<svg class="nowc-svg" width="48" height="48" viewBox="-24 -24 48 48" style="transform:rotate(${rumb}deg)">
+          <path d="M0 -4 L0 -15" stroke="#0b1320" stroke-opacity=".55" stroke-width="6" stroke-linecap="round" fill="none"/>
+          <path d="M0 -23 L7.5 -11 L0 -14.5 L-7.5 -11 Z" fill="#0b1320" fill-opacity=".55" stroke="#0b1320" stroke-opacity=".55" stroke-width="3.5" stroke-linejoin="round"/>
+          <path d="M0 -4 L0 -15" stroke="${col}" stroke-width="3" stroke-linecap="round" fill="none"/>
+          <path d="M0 -22 L6.2 -11.6 L0 -14.8 L-6.2 -11.6 Z" fill="${col}" stroke="#fff" stroke-width="1" stroke-linejoin="round"/></svg>` : '';
+      const m = L.marker([lat, lon], { keyboard: false, icon: L.divIcon({ className: 'nowc-mv', iconSize: [48, 48], iconAnchor: [24, 24],
+        html: `${fletxa}<span class="nowc-dot" style="background:${col}"></span>${pill}` }) });
+      const txt = `<div class="nowc-pop"><div class="nowc-pop-v">${vel === null ? '—' : (vel < 8 ? 'Quasi quieta' : vel + ' km/h')}` +
+        `${mou ? ` <span>cap al ${nowcRumbTxt(rumb)}</span>` : ''}</div>` +
+        `<div class="nowc-pop-s">${vel === null ? 'Encara no calculable (cel·la recent)' : (mou ? `Rumb ${rumb}° · ` : '') + `~${vel} km/h`}` +
+        `${nseg > 0 ? ` · rastre de ${nowcDurada(nseg * pasMin)}` : ''}</div></div>`;
+      m.on('click', () => { if (typeof pickingCenter !== 'undefined' && pickingCenter) return;
+        L.popup({ maxWidth: 260 }).setLatLng([lat, lon]).setContent(txt).openOn(map); });
       m.addTo(nowc.movCapa);
     });
     nowc.movCapa.addTo(map);
-    const mou = fr.filter(r => r[3] !== null && r[3] >= 8).length;
-    info.innerHTML = `${fr.length} cel·les intenses · ${mou} en moviment`;
+    const nMou = fr.filter(r => r[3] !== null && r[3] >= 8).length;
+    info.innerHTML = `${fr.length} cel·les intenses · ${nMou} en moviment`;
   }
 
   function nowcMostraAvisos(){
