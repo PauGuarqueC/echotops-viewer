@@ -75,16 +75,27 @@ def episodis(cub, ok, llindar, min_dur_min):
     return out
 
 
+# Nivells d'intensitat: classe mínima -> (etiqueta, minuts continus per considerar persistència)
+NIVELLS_DEFECTE = ["5:120", "6:60", "8:30"]
+DBZ_INF = {5: 30, 6: 35, 7: 40, 8: 45, 9: 50}   # límit inferior de la classe (dBZ)
+
+
+def mm_h_dbz(dbz):
+    """Intensitat (mm/h) per Z-R Marshall-Palmer al límit inferior de la classe."""
+    return (10 ** (dbz / 10.0) / 200.0) ** (1 / 1.6)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arrel", default="/home/claude/javimiroo/radar-arxiu/data")
     ap.add_argument("--sortida", default="/home/claude/persistencia/sortida_visor")
-    ap.add_argument("--llindar", type=int, default=8, help="classe mínima (8 = >=45 dBZ)")
-    ap.add_argument("--min-ratxa", type=int, default=30, help="minuts continus per considerar persistència")
-    ap.add_argument("--hores", type=float, nargs="+", default=[3, 6, 12, 24])
+    ap.add_argument("--nivells", nargs="+", default=NIVELLS_DEFECTE, metavar="CLASSE:MIN",
+                    help="classe mínima i minuts continus, p.ex. 6:60 (classe 6 = >=35 dBZ)")
+    ap.add_argument("--hores", type=float, nargs="+", default=[3, 6, 12, 24, 48, 72])
     ap.add_argument("--bbox", type=float, nargs=4, default=BBOX_CAT, metavar=("LON0", "LAT0", "LON1", "LAT1"))
     ap.add_argument("--final", help="AAAAMMDDHHMM UTC (per defecte, l'últim fotograma)")
     a = ap.parse_args()
+    nivells = [tuple(int(x) for x in n.split(":")) for n in a.nivells]
 
     arrel = Path(a.arrel)
     frames = P.llista_fotogrames(arrel)
@@ -104,19 +115,25 @@ def main():
     (r0, r1, c0, c1), lb = retalla(bounds, a.bbox, cub.shape[1:])
     cub = cub[:, r0:r1, c0:c1]
 
-    for hores in a.hores:
-        n = int(hores * 60 / P.PAS_MIN) + 1
-        res = P.calcula(cub[-n:], ok[-n:], a.llindar)
-        camp = np.where(res["ratxa_max"] >= a.min_ratxa, res["ratxa_max"], 0)
-        P.png_camp(camp, 180, tmp / f"ratxa_{int(hores)}h.png")   # escala fixa: 30 min (groc) -> >=3 h (granat)
+    meta_nivells, total_px = [], 0
+    for cls, min_ratxa in nivells:
+        for hores in a.hores:
+            n = int(hores * 60 / P.PAS_MIN) + 1
+            res = P.calcula(cub[-n:], ok[-n:], cls)
+            camp = np.where(res["ratxa_max"] >= min_ratxa, res["ratxa_max"], 0)
+            # escala fixa respecte al mínim: mínim (groc) -> 6x el mínim (granat)
+            P.png_camp(camp, min_ratxa * 6, tmp / f"ratxa_c{cls}_{int(hores)}h.png")
+        ep = episodis(cub, ok, cls, min_ratxa)
+        total_px += len(ep)
+        (tmp / f"episodis_c{cls}.json").write_text(json.dumps(
+            {"t0": ts[0].strftime("%Y-%m-%dT%H:%M:%SZ"), "pas_min": P.PAS_MIN, "ep": ep}, separators=(",", ":")))
+        dbz = DBZ_INF.get(cls, 45)
+        meta_nivells.append({"classe": cls, "dbz": dbz, "mm_h": round(mm_h_dbz(dbz)),
+                             "min_ratxa_min": min_ratxa, "n_pixels": len(ep)})
 
-    ep = episodis(cub, ok, a.llindar, a.min_ratxa)
-    (tmp / "episodis.json").write_text(json.dumps(
-        {"t0": ts[0].strftime("%Y-%m-%dT%H:%M:%SZ"), "pas_min": P.PAS_MIN, "ep": ep}, separators=(",", ":")))
     (tmp / "meta.json").write_text(json.dumps({
         "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "bounds": lb, "rows": r1 - r0, "cols": c1 - c0,
-        "llindar_classe": a.llindar, "min_ratxa_min": a.min_ratxa, "hores": a.hores,
-        "cobertura": float(ok.mean()), "n_pixels_amb_persistencia": len(ep),
+        "nivells": meta_nivells, "hores": a.hores, "cobertura": float(ok.mean()),
         "escala_classes": "1=5-15dBZ,2=15-20,3=20-25,4=25-30,5=30-35,6=35-40,7=40-45,8=45-50,9=50-55,10=55-60,11=60-65,12=>65",
     }, indent=1))
 
@@ -126,7 +143,8 @@ def main():
         shutil.rmtree(dest)
     tmp.rename(dest)
     mida = sum(p.stat().st_size for p in dest.iterdir())
-    print(f"OK {fi:%Y-%m-%d %H:%M}Z | retall {r1-r0}x{c1-c0} | píxels amb persistència: {len(ep)} | {mida/1024:.0f} KB")
+    detall = " | ".join(f"c{n['classe']}: {n['n_pixels']} px" for n in meta_nivells)
+    print(f"OK {fi:%Y-%m-%d %H:%M}Z | retall {r1-r0}x{c1-c0} | {detall} | {mida/1024:.0f} KB")
 
 
 if __name__ == "__main__":
