@@ -498,8 +498,7 @@
   // Echotops i reflectivitat són excloents: amb la reflectivitat visible s'amaga la capa d'echotops i la seva llegenda
 
   // ---- Llegenda compartida: el mateix quadre (posició i lectura al passar el ratolí) que echotops ----
-  const LX = { t: null, ac: null, fallos: 0 };
-  const LX_SAT_LEG = () => `${SAT.url}?service=WMS&request=GetLegendGraphic&version=1.3.0&format=image/png&layer=${encodeURIComponent(SAT.capa)}&style=${encodeURIComponent(SAT.estil)}`;
+    const LX_SAT_LEG = () => `${SAT.url}?service=WMS&request=GetLegendGraphic&version=1.3.0&format=image/png&layer=${encodeURIComponent(SAT.capa)}&style=${encodeURIComponent(SAT.estil)}`;
   const LX_TXT0 = 'Passa el cursor pel mapa';
   function legendaMode(){ return refl.actiu ? 'refl' : (refl.mode === 'sat' ? 'sat' : 'echo'); }
   function legendaX(){
@@ -520,7 +519,7 @@
     if (m === x.dataset.mode) return;
     x.dataset.mode = m;
     const t = document.getElementById('lx-title'), b = document.getElementById('lx-body'), c = document.getElementById('lx-credit'), h = document.getElementById('lx-hover');
-    if (h) h.textContent = LX_TXT0;
+    if (h){ h.textContent = LX_TXT0; h.style.display = m === 'refl' ? '' : 'none'; }
     if (m === 'refl'){
       t.textContent = 'Reflectivitat radar (dBZ)';
       b.innerHTML = '<div class="bands">' + REFL_LLEGENDA.map(([col, v]) => `<span style="background:${col}" title="≥ ${v} dBZ"></span>`).join('') + '</div>' +
@@ -556,33 +555,9 @@
     const lo = +REFL_LLEGENDA[k][1];
     return k === REFL_LLEGENDA.length - 1 ? `Reflectivitat: ≥ ${lo} dBZ` : `Reflectivitat: ${lo}–${lo + 5} dBZ`;
   }
-  function satValor(ll, el){
-    clearTimeout(LX.t);
-    if (!sat.time || LX.fallos >= 3){ el.textContent = 'Lectura de valor no disponible'; return; }
-    LX.t = setTimeout(async () => {
-      if (LX.ac) LX.ac.abort();
-      LX.ac = new AbortController();
-      const d = 0.05, bbox = [ll.lat - d, ll.lng - d, ll.lat + d, ll.lng + d].map(v => v.toFixed(5)).join(',');
-      const url = `${SAT.url}?service=WMS&request=GetFeatureInfo&version=1.3.0&layers=${encodeURIComponent(SAT.capa)}&query_layers=${encodeURIComponent(SAT.capa)}` +
-        `&styles=${encodeURIComponent(SAT.estil)}&crs=EPSG:4326&bbox=${bbox}&width=101&height=101&i=50&j=50&info_format=text/plain&feature_count=1&time=${sat.time}`;
-      try{
-        const r = await fetch(url, { signal: LX.ac.signal });
-        if (!r.ok) throw new Error(r.status);
-        const m = (await r.text()).match(/=\s*(-?\d+(?:\.\d+)?)/);
-        LX.fallos = 0;
-        if (!m){ el.textContent = 'Sense dada a aquest punt'; return; }
-        const v = +m[1];
-        el.textContent = (v >= 150 && v <= 350) ? `Temp. brillantor: ${(v - 273.15).toFixed(1)} °C (${v.toFixed(1)} K)` : `Valor: ${v}`;
-      }catch(err){
-        if (err.name === 'AbortError') return;
-        LX.fallos++; el.textContent = 'Lectura de valor no disponible';
-      }
-    }, 150);
-  }
   map.on('mousemove', e => {
-    const m = legendaMode(); if (m === 'echo') return;
-    const el = document.getElementById('lx-hover'); if (!el) return;
-    if (m === 'refl') el.textContent = reflValor(e.latlng); else satValor(e.latlng, el);
+    if (legendaMode() !== 'refl') return;
+    const el = document.getElementById('lx-hover'); if (el) el.textContent = reflValor(e.latlng);
   });
   map.on('mouseout', () => { const el = document.getElementById('lx-hover'); if (el) el.textContent = LX_TXT0; });
   function reflExcl(){
