@@ -524,7 +524,7 @@ function initMap(){
   const NOWC_NOM = { 1: 'Vigilància', 2: 'Atenció', 3: 'Alerta' };
   const NOWC_COLS = ['nivell', 'lat', 'lon', 'area_km2', 'enganxada_min', 'classe_max', 'mm_mitjana', 'mm_max', 'mm_h_ara', 's', 'w', 'n', 'e', 'dist_costa_km'];
   const NOWC_DBZ = { 6: '35–40', 7: '40–45', 8: '45–50', 9: '50–55', 10: '55–60', 11: '60–65', 12: '> 65' };
-  const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1', NOWC_LS_MOV = 'nowcast_mov_v1', NOWC_LS_SAT = 'nowcast_sat_v1', NOWC_LS_CAPA = 'nowcast_capa_v1';
+  const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1', NOWC_LS_MOV = 'nowcast_mov_v1', NOWC_LS_SAT = 'nowcast_sat_v2', NOWC_LS_CAPA = 'nowcast_capa_v1';
   const nowcOberts = [];   // avisos que continuen oberts: [{id, c, horaTxt}] (es conserven en recarregar la pàgina)
   const nowcDesaOberts = () => { try{ localStorage.setItem(NOWC_LS_OB, JSON.stringify(nowcOberts)); }catch(e){} };
 
@@ -731,7 +731,6 @@ function initMap(){
           <div style="display:flex;align-items:center;gap:6px;font-size:11px;opacity:.85;"><span>Opacitat satèl·lit</span>
             <input type="range" id="sat-op" min="20" max="100" step="5" style="flex:1;margin:0;min-width:0;" title="Opacitat del satèl·lit"></div>
           <div id="sat-info" style="margin-top:2px;font-size:11px;line-height:1.4;opacity:.9;"></div>
-          <img id="sat-leg" alt="" style="display:block;max-width:100%;margin-top:4px;" onerror="this.style.display='none'">
         </div>
         <div class="nowc-sec" style="margin-top:10px;border-top:1px solid var(--panel-border);padding-top:8px;">Superposicions</div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:3px;">
@@ -934,7 +933,7 @@ function initMap(){
   });
   const satTime = ms => { const d = new Date(Math.floor(ms / 600000) * 600000); return d.toISOString().slice(0, 19) + 'Z'; };
   function satMostra(){
-    const ctl = document.getElementById('sat-ctl'), info = document.getElementById('sat-info'), leg = document.getElementById('sat-leg');
+    const ctl = document.getElementById('sat-ctl'), info = document.getElementById('sat-info');
     if (!ctl) return;
     ctl.style.display = sat.actiu ? 'block' : 'none';
     if (!sat.actiu){ if (sat.capa){ map.removeLayer(sat.capa); sat.capa = null; sat.time = null; } return; }
@@ -948,7 +947,6 @@ function initMap(){
       sat.capa.on('tileload', () => { sat.errs = 0; });
       sat.capa.addTo(map);
       sat.time = t;
-      if (leg){ leg.style.display = 'block'; leg.src = `${SAT.url}?service=WMS&request=GetLegendGraphic&version=1.3.0&format=image/png&layer=${encodeURIComponent(SAT.capa)}&style=${encodeURIComponent(SAT.estil)}`; }
     }else if (t !== sat.time){
       sat.time = t; sat.capa.options.time = t; sat.capa.redraw();
     }
@@ -1008,14 +1006,103 @@ function initMap(){
 
   // Imatge de reflectivitat (data/nowcast/refl/YYYYMMDDHHMM.png) de l'instant més proper al de l'scrubber
   // Echotops i reflectivitat són excloents: amb la reflectivitat visible s'amaga la capa d'echotops i la seva llegenda
+
+  // ---- Llegenda compartida: el mateix quadre (posició i lectura al passar el ratolí) que echotops ----
+  const LX = { t: null, ac: null, fallos: 0 };
+  const LX_SAT_LEG = () => `${SAT.url}?service=WMS&request=GetLegendGraphic&version=1.3.0&format=image/png&layer=${encodeURIComponent(SAT.capa)}&style=${encodeURIComponent(SAT.estil)}`;
+  const LX_TXT0 = 'Passa el cursor pel mapa';
+  function legendaMode(){ return refl.actiu ? 'refl' : (refl.mode === 'sat' ? 'sat' : 'echo'); }
+  function legendaX(){
+    const lg = document.getElementById('legend'); if (!lg) return;
+    let x = document.getElementById('legend-x');
+    if (!x){
+      const st = document.createElement('style');
+      st.textContent = '#legend.nx > *:not(#legend-x){ display:none !important; }';
+      document.head.appendChild(st);
+      lg.insertAdjacentHTML('afterbegin', '<div id="legend-x" style="display:none"><div class="title" id="lx-title"></div><div id="lx-body"></div>' +
+        '<div id="lx-hover" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--panel-border);color:var(--text);font-weight:500;font-size:12px;">' + LX_TXT0 + '</div>' +
+        '<div id="lx-credit" style="margin-top:8px;font-size:10px;color:var(--text-dim);"></div></div>');
+      x = document.getElementById('legend-x');
+    }
+    const m = legendaMode();
+    lg.classList.toggle('nx', m !== 'echo');
+    x.style.display = m === 'echo' ? 'none' : 'block';
+    if (m === x.dataset.mode) return;
+    x.dataset.mode = m;
+    const t = document.getElementById('lx-title'), b = document.getElementById('lx-body'), c = document.getElementById('lx-credit'), h = document.getElementById('lx-hover');
+    if (h) h.textContent = LX_TXT0;
+    if (m === 'refl'){
+      t.textContent = 'Reflectivitat radar (dBZ)';
+      b.innerHTML = '<div class="bands">' + REFL_LLEGENDA.map(([col, v]) => `<span style="background:${col}" title="≥ ${v} dBZ"></span>`).join('') + '</div>' +
+        '<div class="band-labels">' + REFL_LLEGENDA.map(([col, v], i) => (i % 2 === 0) ? `<span style="left:${((i + 0.5) / REFL_LLEGENDA.length * 100).toFixed(2)}%">${v}${i === REFL_LLEGENDA.length - 1 ? '+' : ''}</span>` : '').join('') + '</div>';
+      c.textContent = 'Dades: AEMET';
+    }else if (m === 'sat'){
+      t.textContent = 'Satèl·lit IR 10,5 µm';
+      b.innerHTML = '<img alt="" style="display:block;max-width:100%;" src="' + LX_SAT_LEG() + '" onerror="this.outerHTML=\'<span style=&quot;font-size:10px&quot;>Llegenda no disponible</span>\'">';
+      c.textContent = '© EUMETSAT · MTG FCI';
+    }
+  }
+  function reflPix(clau, bounds){
+    refl.px = null; refl.clau = clau; refl.bnd = bounds;
+    const im = new Image();
+    im.onload = () => {
+      if (refl.clau !== clau) return;
+      const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+      const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
+      refl.px = { g, w: im.width, h: im.height };
+    };
+    im.src = `data/nowcast/refl/${clau}.png`;
+  }
+  function reflValor(ll){
+    if (!refl.px || !refl.bnd) return 'Sense dades de valor per aquest frame';
+    const [[s, w], [n, e]] = refl.bnd;
+    if (ll.lat < s || ll.lat > n || ll.lng < w || ll.lng > e) return "Fora de l'àrea de radar";
+    const x = Math.min(refl.px.w - 1, Math.max(0, Math.floor((ll.lng - w) / (e - w) * refl.px.w)));
+    const y = Math.min(refl.px.h - 1, Math.max(0, Math.floor((n - ll.lat) / (n - s) * refl.px.h)));
+    const d = refl.px.g.getImageData(x, y, 1, 1).data;
+    if (d[3] === 0) return 'Sense eco a aquest punt';
+    let k = 0, best = 1e9;
+    REFL_LLEGENDA.forEach(([col], i) => { const q = col.match(/\d+/g).map(Number); const dd = (q[0] - d[0]) ** 2 + (q[1] - d[1]) ** 2 + (q[2] - d[2]) ** 2; if (dd < best){ best = dd; k = i; } });
+    const lo = +REFL_LLEGENDA[k][1];
+    return k === REFL_LLEGENDA.length - 1 ? `Reflectivitat: ≥ ${lo} dBZ` : `Reflectivitat: ${lo}–${lo + 5} dBZ`;
+  }
+  function satValor(ll, el){
+    clearTimeout(LX.t);
+    if (!sat.time || LX.fallos >= 3){ el.textContent = 'Lectura de valor no disponible'; return; }
+    LX.t = setTimeout(async () => {
+      if (LX.ac) LX.ac.abort();
+      LX.ac = new AbortController();
+      const d = 0.05, bbox = [ll.lat - d, ll.lng - d, ll.lat + d, ll.lng + d].map(v => v.toFixed(5)).join(',');
+      const url = `${SAT.url}?service=WMS&request=GetFeatureInfo&version=1.3.0&layers=${encodeURIComponent(SAT.capa)}&query_layers=${encodeURIComponent(SAT.capa)}` +
+        `&styles=${encodeURIComponent(SAT.estil)}&crs=EPSG:4326&bbox=${bbox}&width=101&height=101&i=50&j=50&info_format=text/plain&feature_count=1&time=${sat.time}`;
+      try{
+        const r = await fetch(url, { signal: LX.ac.signal });
+        if (!r.ok) throw new Error(r.status);
+        const m = (await r.text()).match(/=\s*(-?\d+(?:\.\d+)?)/);
+        LX.fallos = 0;
+        if (!m){ el.textContent = 'Sense dada a aquest punt'; return; }
+        const v = +m[1];
+        el.textContent = (v >= 150 && v <= 350) ? `Temp. brillantor: ${(v - 273.15).toFixed(1)} °C (${v.toFixed(1)} K)` : `Valor: ${v}`;
+      }catch(err){
+        if (err.name === 'AbortError') return;
+        LX.fallos++; el.textContent = 'Lectura de valor no disponible';
+      }
+    }, 150);
+  }
+  map.on('mousemove', e => {
+    const m = legendaMode(); if (m === 'echo') return;
+    const el = document.getElementById('lx-hover'); if (!el) return;
+    if (m === 'refl') el.textContent = reflValor(e.latlng); else satValor(e.latlng, el);
+  });
+  map.on('mouseout', () => { const el = document.getElementById('lx-hover'); if (el) el.textContent = LX_TXT0; });
   function reflExcl(){
     const on = !!refl.overlay || refl.mode === 'sat';
     if (typeof currentOverlay !== 'undefined' && currentOverlay) currentOverlay.setOpacity(on ? 0 : 0.85);
-    const lg = document.getElementById('legend');
-    if (lg) lg.style.display = on ? 'none' : '';
+    legendaX();
   }
   function reflMostra(){
     if (refl.overlay){ map.removeLayer(refl.overlay); refl.overlay = null; }
+    refl.px = null;
     reflExcl(); setTimeout(reflExcl, 0);
     const info = document.getElementById('refl-info');
     if (!info) return;
@@ -1032,13 +1119,11 @@ function initMap(){
     }
     const clau = nowcClau(Math.min(Math.round(objectiu / pas) * pas, fi));
     const hora = nowcHoraLocal(nowcMs(clau));
-    const llegenda = '<div style="display:flex;margin-top:3px;">' + REFL_LLEGENDA.map(([c, v]) =>
-      `<span title="≥ ${v} dBZ" style="flex:1;height:8px;background:${c}"></span>`).join('') +
-      '</div><div style="display:flex;justify-content:space-between;opacity:.7;"><span>15</span><span>40</span><span>65+ dBZ</span></div>';
-    info.innerHTML = `Radar de les ${hora}` + llegenda;
+    info.innerHTML = `Radar de les ${hora}`;
     const ov = L.imageOverlay(`data/nowcast/refl/${clau}.png`, u.bounds, { opacity: 0.75, interactive: false });
     ov.on('error', () => { if (refl.overlay === ov){ map.removeLayer(ov); refl.overlay = null; reflExcl(); info.innerHTML = `Falta la imatge del radar de les ${hora}`; } });
     refl.overlay = ov.addTo(map);
+    reflPix(clau, u.bounds);
     ov.bringToBack();
     reflExcl(); setTimeout(reflExcl, 0);
   }
