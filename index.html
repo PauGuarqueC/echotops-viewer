@@ -617,17 +617,38 @@ function initMap(){
   // ---- Evolució de la tempesta: intensitat (línia, mm/h) i acumulació (barres, mm) al llarg del temps ----
   // L'historial no porta identificador de cel·la: se segueix pel fotograma veí més proper amb una durada d'aturada coherent.
   // Si moviment.json porta la intensitat de cada pista, es dibuixa tota la vida de la cel·la (des de la primera detecció)
-  function nowcSeriePista(c){
+  function nowcSeriePista(c, clau){
     const D = nowc.mov;
-    if (!D || !c.mov || c.mov.id === undefined || !D.columnes || D.columnes.indexOf('mm_h') < 0) return null;
-    const pas = (D.pas_min || 10) / 60, S = [];
-    let acum = 0;
-    Object.keys(D.frames).sort().forEach(k => {
-      const r = D.frames[k].find(q => q[0] === c.mov.id);
-      if (!r || r[5] === undefined) return;
-      acum += r[5] * pas;
-      S.push({ ms: nowcMs(k), mmh: r[5], acum: Math.round(acum * 10) / 10 });
-    });
+    if (!D || !D.columnes || D.columnes.indexOf('mm_h') < 0 || !D.frames[clau]) return null;
+    const pas = (D.pas_min || 10) * 60000, h = (D.pas_min || 10) / 60;
+    const cy = (c.s + c.n) / 2, cx = (c.w + c.e) / 2;
+    // fila de partida: la pista més propera al centre de la cel·la (preferint la del mateix id)
+    let r0 = null, bd = 0.12;
+    D.frames[clau].forEach(r => { const d = Math.hypot(r[1] - cy, r[2] - cx) - ((c.mov && c.mov.id === r[0]) ? 0.03 : 0); if (d < bd){ bd = d; r0 = r; } });
+    if (!r0) return null;
+    // se segueix la cel·la fotograma a fotograma amb la posició predita pel moviment (tolera canvis d'id i forats de fins a 3 fotogrames)
+    const camina = dir => {
+      const res = [];
+      let r = r0, ms = nowcMs(clau);
+      for (let n = 0; n < 80; n++){
+        let trobat = null;
+        for (let k = 1; k <= 3 && !trobat; k++){
+          const fr = D.frames[nowcClau(ms + dir * k * pas)];
+          if (!fr) continue;
+          const v = r[3] || 0, th = (r[4] || 0) * Math.PI / 180;
+          const py = r[1] + dir * k * (v * Math.cos(th) * h) / 111.2, px = r[2] + dir * k * (v * Math.sin(th) * h) / (111.2 * Math.cos(r[1] * Math.PI / 180));
+          let best = null, bs = 0.1 + 0.02 * k;
+          fr.forEach(q => { const d = Math.hypot(q[1] - py, q[2] - px) - (q[0] === r[0] ? 0.03 : 0); if (d < bs){ bs = d; best = q; } });
+          if (best) trobat = { q: best, ms: ms + dir * k * pas };
+        }
+        if (!trobat) break;
+        res.push(trobat); r = trobat.q; ms = trobat.ms;
+      }
+      return res;
+    };
+    const punts = [{ q: r0, ms: nowcMs(clau) }].concat(camina(-1), camina(+1)).filter(p => p.q[5] !== undefined).sort((x, y) => x.ms - y.ms);
+    let acum = 0, prev = null;
+    const S = punts.map(p => { acum += p.q[5] * (prev === null ? pas : p.ms - prev) / 3600000; prev = p.ms; return { ms: p.ms, mmh: p.q[5], acum: Math.round(acum * 10) / 10 }; });
     return S.length >= 2 ? S : null;
   }
   function nowcSerie(c, clau){
@@ -660,7 +681,7 @@ function initMap(){
     return cap;
   }
   function nowcGraf(c, clau){
-    const S = nowcSeriePista(c) || nowcSerie(c, clau), ms0 = nowcMs(clau);
+    const S = nowcSeriePista(c, clau) || nowcSerie(c, clau), ms0 = nowcMs(clau);
     if (S.length < 2) return '<div style="margin-top:8px;font-size:11px;opacity:.7;">Encara no hi ha prou historial per dibuixar l\'evolució.</div>';
     const W = 300, H = 150, L_ = 30, R_ = 32, T_ = 10, B_ = 22, pw = W - L_ - R_, ph = H - T_ - B_;
     const nice = v => { const e = Math.pow(10, Math.floor(Math.log10(v || 1))), m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e; };
