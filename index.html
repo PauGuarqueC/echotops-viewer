@@ -645,7 +645,7 @@ function initMap(){
           <a href="#" id="nowc-prova" style="margin-left:auto;font-size:11px;">prova</a>
         </label>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
-          <input type="checkbox" id="refl-toggle" style="margin-top:2px"> <span>Reflectivitat radar (AEMET)</span>
+          <input type="checkbox" id="refl-toggle" style="margin-top:2px"> <span>Reflectivitat radar (AEMET) <i style="opacity:.7">— substitueix els echotops</i></span>
         </label>
         <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>`;
       L.DomEvent.disableClickPropagation(div);
@@ -739,8 +739,16 @@ function initMap(){
   }
 
   // Imatge de reflectivitat (data/nowcast/refl/YYYYMMDDHHMM.png) de l'instant més proper al de l'scrubber
+  // Echotops i reflectivitat són excloents: amb la reflectivitat visible s'amaga la capa d'echotops i la seva llegenda
+  function reflExcl(){
+    const on = !!refl.overlay;
+    if (typeof currentOverlay !== 'undefined' && currentOverlay) currentOverlay.setOpacity(on ? 0 : 0.85);
+    const lg = document.getElementById('legend');
+    if (lg) lg.style.display = on ? 'none' : '';
+  }
   function reflMostra(){
     if (refl.overlay){ map.removeLayer(refl.overlay); refl.overlay = null; }
+    reflExcl(); setTimeout(reflExcl, 0);
     const info = document.getElementById('refl-info');
     if (!info) return;
     const u = nowc.ultim;
@@ -761,9 +769,10 @@ function initMap(){
       '</div><div style="display:flex;justify-content:space-between;opacity:.7;"><span>15</span><span>40</span><span>65+ dBZ</span></div>';
     info.innerHTML = `Radar de les ${hora}` + llegenda;
     const ov = L.imageOverlay(`data/nowcast/refl/${clau}.png`, u.bounds, { opacity: 0.75, interactive: false });
-    ov.on('error', () => { if (refl.overlay === ov){ map.removeLayer(ov); refl.overlay = null; info.innerHTML = `Falta la imatge del radar de les ${hora}`; } });
+    ov.on('error', () => { if (refl.overlay === ov){ map.removeLayer(ov); refl.overlay = null; reflExcl(); info.innerHTML = `Falta la imatge del radar de les ${hora}`; } });
     refl.overlay = ov.addTo(map);
     ov.bringToBack();
+    reflExcl(); setTimeout(reflExcl, 0);
   }
 
   async function nowcActiva(on){
