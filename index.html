@@ -492,7 +492,8 @@ function initMap(){
   // Dades de nowcast_export.py a data/nowcast/: avisos.json (últim fotograma), historial.json (48 h), refl/*.png.
   // La capa segueix l'instant de l'scrubber principal (currentTs, YYYYMMDD_HHMM UTC) via nowcMostra(ts).
   // Els avisos fixos amb so surten només per a les cel·les noves de l'últim fotograma (no en recórrer l'historial).
-  const nowc = { hist: null, ultim: null, marcs: L.layerGroup(), actiu: true, timer: null, ts: null, vistos: [], so: true, audio: null, pendent: 0 };
+  const nowc = { hist: null, ultim: null, marcs: L.layerGroup(), actiu: true, timer: null, ts: null, vistos: [], so: true, audio: null, pendent: 0,
+    mov: null, movActiu: false, movCapa: L.layerGroup() };
   const refl = { overlay: null, actiu: false };
   const REFL_LLEGENDA = [['rgb(150,215,255)', '15'], ['rgb(70,160,255)', '20'], ['rgb(0,190,220)', '25'], ['rgb(0,190,80)', '30'],
     ['rgb(170,215,0)', '35'], ['rgb(255,235,0)', '40'], ['rgb(255,150,0)', '45'], ['rgb(240,40,20)', '50'],
@@ -501,12 +502,13 @@ function initMap(){
   const NOWC_NOM = { 1: 'Vigilància', 2: 'Atenció', 3: 'Alerta' };
   const NOWC_COLS = ['nivell', 'lat', 'lon', 'area_km2', 'enganxada_min', 'classe_max', 'mm_mitjana', 'mm_max', 'mm_h_ara', 's', 'w', 'n', 'e', 'dist_costa_km'];
   const NOWC_DBZ = { 6: '35–40', 7: '40–45', 8: '45–50', 9: '50–55', 10: '55–60', 11: '60–65', 12: '> 65' };
-  const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1';
+  const NOWC_LS = 'nowcast_vistos_v1', NOWC_LS_SO = 'nowcast_so_v1', NOWC_LS_OB = 'nowcast_oberts_v1', NOWC_LS_MOV = 'nowcast_mov_v1';
   const nowcOberts = [];   // avisos que continuen oberts: [{id, c, horaTxt}] (es conserven en recarregar la pàgina)
   const nowcDesaOberts = () => { try{ localStorage.setItem(NOWC_LS_OB, JSON.stringify(nowcOberts)); }catch(e){} };
 
   try{ const v = JSON.parse(localStorage.getItem(NOWC_LS) || '[]'); if (Array.isArray(v)) nowc.vistos = v; }catch(e){}
   try{ if (localStorage.getItem(NOWC_LS_SO) === '0') nowc.so = false; }catch(e){}
+  try{ if (localStorage.getItem(NOWC_LS_MOV) === '1') nowc.movActiu = true; }catch(e){}
 
   // Contenidor dels avisos fixos: sota la llegenda, a la dreta
   (function(){
@@ -520,6 +522,8 @@ function initMap(){
       #nowc-avisos .nowc-av .x:hover{ opacity:1; }
       #nowc-avisos .nowc-av .cap{ cursor:pointer; padding-right:18px; }
       #nowc-avisos .nowc-tot{ align-self:flex-end; font-size:11px; background:var(--panel); color:var(--text); border:1px solid var(--panel-border); border-radius:3px; padding:3px 8px; cursor:pointer; }
+      .nowc-fletxa{ background:none; border:0; }
+      .nowc-fletxa div{ font-size:20px; line-height:20px; width:20px; height:20px; text-align:center; color:#fff; text-shadow:0 0 3px #000, 0 0 3px #000, 0 0 6px #000; }
       .nowc-ctl{ width:230px; color:var(--text); font-size:12px; }
       .nowc-ctl .nowc-cap{ display:none; cursor:pointer; font-weight:600; align-items:center; justify-content:space-between; gap:8px; }
       @media (max-width:640px){
@@ -555,6 +559,15 @@ function initMap(){
   }
   const nowcHoraLocal = ms => new Date(ms).toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
 
+  const NOWC_RUMBS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+  const nowcRumbTxt = g => NOWC_RUMBS[Math.round(g / 45) % 8];
+  // Text de moviment: "quasi estàtica" per sota de 8 km/h
+  function nowcMovTxt(vel, rumb){
+    if (vel === null || vel === undefined) return 'encara no calculable (cel·la recent)';
+    if (vel < 8) return `quasi estàtica (~${vel} km/h)`;
+    return `<b>~${vel} km/h</b> cap al ${nowcRumbTxt(rumb)} (${rumb}°)`;
+  }
+
   // Mateix contingut al popup del mapa i als avisos fixos
   function nowcHtml(c, horaTxt, ara){
     const f = (t, v) => `<div style="margin-top:2px;"><span style="opacity:.7">${t}</span> ${v}</div>`;
@@ -564,7 +577,20 @@ function initMap(){
       (mar ? `<div style="margin-top:2px;opacity:.8">A ~${c.dist_costa_km} km de la costa: no genera avís</div>` : '') +
       f('Intensitat de pluja:', `<b>~${c.mm_h_ara} mm/h</b>`) +
       f('Acumulat des que s\'ha aturat:', `<b>~${c.mm_mitjana} mm</b> de mitjana · fins a <b>~${c.mm_max} mm</b>`) +
-      f('Reflectivitat màxima:', `${NOWC_DBZ[c.classe_max] || '> 35'} dBZ`);
+      f('Reflectivitat màxima:', `${NOWC_DBZ[c.classe_max] || '> 35'} dBZ`) +
+      (c.mov ? f('Moviment:', nowcMovTxt(c.mov.vel, c.mov.rumb)) : '');
+  }
+  // Adjunta a cada cel·la el moviment de la pista més propera del mateix fotograma
+  function nowcAdjuntaMov(cels, clau){
+    const fr = nowc.mov && nowc.mov.frames && nowc.mov.frames[clau];
+    if (!fr) return cels;
+    cels.forEach(c => {
+      const cy = (c.s + c.n) / 2, cx = (c.w + c.e) / 2;
+      let best = null, bd = 1e9;
+      fr.forEach(r => { const d = Math.hypot(r[1] - cy, r[2] - cx); if (d < bd){ bd = d; best = r; } });
+      if (best && bd < 0.1) c.mov = { vel: best[3], rumb: best[4] };
+    });
+    return cels;
   }
 
   // ---- So (Web Audio; els navegadors només el deixen sonar després d'una interacció de l'usuari) ----
@@ -641,7 +667,7 @@ function initMap(){
     const horaTxt = nowcHoraLocal(fi), ara = Date.now();
     nowc.vistos = nowc.vistos.filter(r => ara - r.last < 6 * 3600000);
     let maxNou = 0;
-    u.cel_les.map(nowcNorm).filter(c => !nowcEsMar(c)).forEach(c => {
+    nowcAdjuntaMov(u.cel_les.map(nowcNorm), nowcClau(fi)).filter(c => !nowcEsMar(c)).forEach(c => {
       const cy = (c.s + c.n) / 2, cx = (c.w + c.e) / 2;
       let r = nowc.vistos.find(v => Math.abs(v.lat - cy) < 0.1 && Math.abs(v.lon - cx) < 0.13 && ara - v.last < 90 * 60000);
       const nova = !r, puja = r && c.nivell > r.nivell;
@@ -670,7 +696,11 @@ function initMap(){
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
           <input type="checkbox" id="refl-toggle" style="margin-top:2px"> <span>Reflectivitat radar (AEMET) <i style="opacity:.7">— substitueix els echotops</i></span>
         </label>
-        <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div></div>`;
+        <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
+        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:8px;">
+          <input type="checkbox" id="mov-toggle" style="margin-top:2px"> <span>Moviment (rastre 1 h i velocitat)</span>
+        </label>
+        <div id="mov-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div></div>`;
       const cap = div.querySelector('.nowc-cap');
       const fl = div.querySelector('.nowc-fl');
       const plega = c => { div.classList.toggle('col', c); fl.textContent = c ? '▴' : '▾'; nowcAjustaMobil(); };
@@ -679,6 +709,9 @@ function initMap(){
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
       div.querySelector('#nowc-toggle').addEventListener('change', e => nowcActiva(e.target.checked));
+      const mt = div.querySelector('#mov-toggle');
+      mt.checked = nowc.movActiu;
+      mt.addEventListener('change', e => { nowc.movActiu = e.target.checked; try{ localStorage.setItem(NOWC_LS_MOV, nowc.movActiu ? '1' : '0'); }catch(_){} nowcMovMostra(); });
       div.querySelector('#refl-toggle').addEventListener('change', e => { refl.actiu = e.target.checked; reflMostra(); });
       const so = div.querySelector('#nowc-so');
       so.checked = nowc.so;
@@ -712,6 +745,7 @@ function initMap(){
         fetch(`data/nowcast/avisos.json${q}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
       ]);
       nowc.hist = h; nowc.ultim = u;
+      try{ const r = await fetch(`data/nowcast/moviment.json${q}`); nowc.mov = r.ok ? await r.json() : null; }catch(_){ nowc.mov = null; }
     }catch(e){
       nowc.hist = nowc.ultim = null;
       console.warn('No s\'han pogut carregar les dades de nowcasting', e);
@@ -731,7 +765,56 @@ function initMap(){
   function nowcMostra(ts){
     if (ts) nowc.ts = ts;
     nowcMostraAvisos();
+    nowcMovMostra();
     reflMostra();
+  }
+
+  // Moviment de totes les cel·les intenses: rastre (última hora), fletxa de direcció i velocitat
+  function nowcMovMostra(){
+    nowc.movCapa.clearLayers();
+    map.removeLayer(nowc.movCapa);
+    const info = document.getElementById('mov-info');
+    if (!info) return;
+    if (!nowc.movActiu){ info.textContent = ''; return; }
+    const D = nowc.mov;
+    if (!D){ info.textContent = 'Sense dades de moviment'; return; }
+    const fi = nowcMs(D.final_utc.replace(/[-:TZ]/g, '').slice(0, 12));
+    const pas = (D.pas_min || 10) * 60000;
+    const objectiu = nowc.ts ? nowcMs(nowc.ts.replace('_', '')) : fi;
+    if (objectiu > fi + pas || objectiu < fi - D.hores * 3600000 - pas){
+      info.textContent = `Moviment disponible només per a les últimes ${D.hores} h`;
+      return;
+    }
+    const clau = nowcClau(Math.min(Math.round(objectiu / pas) * pas, fi));
+    const ms = nowcMs(clau);
+    const fr = D.frames[clau];
+    if (!fr){ info.textContent = `Sense dades de moviment per a les ${nowcHoraLocal(ms)}`; return; }
+    const idx = {};
+    const pos = i => { const k = nowcClau(ms - i * pas); if (!(k in idx)) idx[k] = D.frames[k] ? Object.fromEntries(D.frames[k].map(r => [r[0], r])) : null; return idx[k]; };
+    fr.forEach(r => {
+      const [id, lat, lon, vel, rumb] = r;
+      const pts = [];
+      for (let i = 6; i >= 0; i--){ const p = pos(i); if (p && p[id]) pts.push([p[id][1], p[id][2]]); }
+      if (pts.length >= 2){
+        L.polyline(pts, { color: '#000', weight: 4, opacity: 0.35, interactive: false }).addTo(nowc.movCapa);
+        L.polyline(pts, { color: '#fff', weight: 2, opacity: 0.9, interactive: false }).addTo(nowc.movCapa);
+      }
+      const txt = `Moviment: ${nowcMovTxt(vel, rumb)}<br><span style="opacity:.7">Rastre dels últims ${Math.max(0, pts.length - 1) * (D.pas_min || 10)} min</span>`;
+      const obre = (e) => { if (typeof pickingCenter !== 'undefined' && pickingCenter) return;
+        L.popup({ maxWidth: 260 }).setLatLng([lat, lon]).setContent(txt).openOn(map); };
+      let m;
+      if (vel !== null && vel >= 8){
+        m = L.marker([lat, lon], { icon: L.divIcon({ className: 'nowc-fletxa', iconSize: [20, 20], iconAnchor: [10, 10],
+          html: `<div style="transform:rotate(${rumb}deg)">▲</div>` }), keyboard: false });
+      }else{
+        m = L.circleMarker([lat, lon], { radius: 4, color: '#fff', weight: 1.5, fillColor: '#888', fillOpacity: 0.9 });
+      }
+      m.on('click', obre);
+      m.addTo(nowc.movCapa);
+    });
+    nowc.movCapa.addTo(map);
+    const mou = fr.filter(r => r[3] !== null && r[3] >= 8).length;
+    info.innerHTML = `${fr.length} cel·les intenses · ${mou} en moviment`;
   }
 
   function nowcMostraAvisos(){
@@ -756,7 +839,7 @@ function initMap(){
       return;
     }
     const esUltim = clau === nowcClau(fi);
-    const cels = esUltim ? u.cel_les.map(nowcNorm) : (h.fotogrames[clau] || []).map(f => Object.fromEntries(NOWC_COLS.map((c, i) => [c, f[i]])));
+    const cels = nowcAdjuntaMov(esUltim ? u.cel_les.map(nowcNorm) : (h.fotogrames[clau] || []).map(f => Object.fromEntries(NOWC_COLS.map((c, i) => [c, f[i]]))), clau);
     const edat = (Date.now() - fi) / 60000;
     const vell = esUltim && edat > 60 ? ` <b style="color:#C8102E">(fa ${Math.round(edat)} min: desactualitzat)</b>` : '';
     if (!cels.length){

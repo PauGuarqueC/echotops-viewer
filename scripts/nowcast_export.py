@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from scipy import ndimage
+from scipy import ndimage, signal
 
 import persist as P
 import nowcast as N
@@ -85,6 +85,149 @@ def distancia_costa(lb, H, W, cache):
     return dist
 
 
+def _camp(c):
+    """Camp de reflectivitat per correlar: classes per sobre de 2 (≈ >15 dBZ); 0 on no hi ha eco o dada."""
+    return np.clip(c.astype(np.float32) - 2, 0, None) * (c != 255)
+
+
+def moviment_cadena(cub, ok, k, y0, y1, x0, x1, passos=6, R=8, marge=6, cor_min=0.3):
+    """Desplaçament mitjà (dy, dx) en píxels per fotograma d'una cel·la (caixa y0:y1, x0:x1 al fotograma k).
+    Correlació creuada normalitzada entre fotogrames consecutius sobre una finestra al voltant de la cel·la (amb un
+    pic parabòlic de subpíxel); la finestra es va movent amb la cel·la i es mitja al llarg de fins a `passos`
+    fotogrames (~1 h). Retorna (dy, dx, n_passos) o None si no és fiable. dy positiu = cap al sud."""
+    H, W = cub.shape[1:]
+    ty = tx = 0.0
+    n = 0
+    fy0, fy1, fx0, fx1 = float(y0), float(y1), float(x0), float(x1)
+    for j in range(passos):
+        kk = k - j
+        if kk - 1 < 0 or not ok[kk] or not ok[kk - 1]:
+            break
+        a0, a1 = max(0, int(round(fy0)) - marge), min(H, int(round(fy1)) + marge)
+        b0, b1 = max(0, int(round(fx0)) - marge), min(W, int(round(fx1)) + marge)
+        if a1 - a0 < 3 or b1 - b0 < 3:
+            break
+        cur = _camp(cub[kk])[a0:a1, b0:b1]
+        da = cur - cur.mean()
+        sa = float((da * da).sum())
+        if sa < 1e-6:
+            break
+        prev = np.pad(_camp(cub[kk - 1]), R)
+        Pr = prev[a0:a1 + 2 * R, b0:b1 + 2 * R]
+        h, w = cur.shape
+        num = signal.correlate(Pr, da, mode="valid")                 # (2R+1, 2R+1): índex [R-dy, R-dx]
+        uns = np.ones((h, w), np.float32)
+        s1 = signal.correlate(Pr, uns, mode="valid")
+        s2 = signal.correlate(Pr * Pr, uns, mode="valid")
+        var = np.maximum(s2 - s1 * s1 / (h * w), 0)
+        den = np.sqrt(sa * var)
+        ncc = np.where(den > 1e-6, num / np.maximum(den, 1e-6), -2.0)
+        ii, jj = np.unravel_index(int(np.argmax(ncc)), ncc.shape)
+        v = float(ncc[ii, jj])
+        if v < cor_min:
+            break
+
+        def par(c, l, r):
+            d = l - 2 * c + r
+            return 0.0 if abs(d) < 1e-9 else float(np.clip(0.5 * (l - r) / d, -0.5, 0.5))
+        sy = par(v, ncc[ii - 1, jj] if ii > 0 else v, ncc[ii + 1, jj] if ii < 2 * R else v)
+        sx = par(v, ncc[ii, jj - 1] if jj > 0 else v, ncc[ii, jj + 1] if jj < 2 * R else v)
+        # índex ii = R-dy  ->  dy = R-ii ; el sub-píxel va en sentit contrari
+        dy, dx = (R - ii) - sy, (R - jj) - sx
+        ty += dy
+        tx += dx
+        n += 1
+        fy0 -= dy
+        fy1 -= dy
+        fx0 -= dx
+        fx1 -= dx
+    return (ty / n, tx / n, n) if n >= 2 else None
+
+
+def segueix(cub, ok, lb, ts, llindar, min_px, k_min_vel=0, finestra_min=60, min_px_pista=4):
+    """Segueix les cel·les intenses (classe >= llindar) fotograma a fotograma.
+    Retorna {k: [[id, lat, lon, vel_kmh|None, rumb_graus|None], ...]} amb ids estables entre fotogrames.
+    Emparellament voraç amb la posició predita (posició anterior + velocitat); la velocitat és un ajust lineal
+    de les últimes posicions (finestra_min). Rumb = direcció cap on es mou (0 = nord, 90 = est)."""
+    s_, w_ = lb[0]
+    n_, e_ = lb[1]
+    H, W = cub.shape[1:]
+    km_y = (n_ - s_) / H * 111.2
+    km_x = (e_ - w_) / W * 111.2 * np.cos(np.radians((n_ + s_) / 2))
+    M = N.mascares(cub, ok, llindar)
+    pistes = {}          # id -> {"k": últim fotograma, "pos": [(k, y_km, x_km)], "vel": (vy, vx) km/fotograma o None}
+    seguent = 1
+    sortida = {}
+    max_pos = max(3, finestra_min // P.PAS_MIN + 1)
+    for k in range(len(ts)):
+        if not ok[k]:
+            continue
+        lab, nl = N.cel_les(M[k], min_px_pista)      # es segueixen també fragments petits: una cel·la pot partir-se
+        cents = []
+        if nl:
+            mides = ndimage.sum(lab > 0, lab, range(1, nl + 1))
+            for (cy, cx), mida in zip(ndimage.center_of_mass(lab > 0, lab, range(1, nl + 1)), mides):
+                cents.append(((cy + 0.5) * km_y, (cx + 0.5) * km_x, cy, cx, mida))
+        # candidats (distància, pista, cel·la)
+        cand = []
+        for pid, p in pistes.items():
+            gap = k - p["k"]
+            if gap > 2:
+                continue
+            y0, x0 = p["pos"][-1][1:]
+            if p["vel"] is not None:
+                y0 += p["vel"][0] * gap
+                x0 += p["vel"][1] * gap
+                rmax = 10 + 6 * gap
+            else:
+                rmax = 14 + 6 * gap
+            for j, (yk, xk, _, _, _) in enumerate(cents):
+                d = float(np.hypot(yk - y0, xk - x0))
+                if d <= rmax:
+                    cand.append((d, pid, j))
+        cand.sort()
+        usat_p, usat_c = set(), set()
+        assig = {}
+        for d, pid, j in cand:
+            if pid in usat_p or j in usat_c:
+                continue
+            usat_p.add(pid)
+            usat_c.add(j)
+            assig[j] = pid
+        files = []
+        for j, (yk, xk, cy, cx, mida) in enumerate(cents):
+            pid = assig.get(j)
+            if pid is None:
+                pid = seguent
+                seguent += 1
+                pistes[pid] = {"k": k, "pos": [], "vel": None}
+            p = pistes[pid]
+            p["k"] = k
+            p["pos"].append((k, yk, xk))
+            p["pos"] = p["pos"][-max_pos:]
+            vel = rumb = None
+            if len(p["pos"]) >= 3:
+                kk = np.array([q[0] for q in p["pos"]], float)
+                vy = np.polyfit(kk, [q[1] for q in p["pos"]], 1)[0]     # km per fotograma (+ cap al sud)
+                vx = np.polyfit(kk, [q[2] for q in p["pos"]], 1)[0]
+                p["vel"] = (vy, vx)
+            if mida >= min_px and k >= k_min_vel:
+                ys, xs = np.nonzero(lab == (j + 1))
+                r = moviment_cadena(cub, ok, k, ys.min(), ys.max() + 1, xs.min(), xs.max() + 1)
+                if r is not None:
+                    vyk, vxk = r[0] * km_y, r[1] * km_x
+                    vel = int(round(float(np.hypot(vyk, vxk)) * 60.0 / P.PAS_MIN))
+                    rumb = int(round(np.degrees(np.arctan2(vxk, -vyk)))) % 360
+            lat = n_ - (cy + 0.5) / H * (n_ - s_)
+            lon = w_ + (cx + 0.5) / W * (e_ - w_)
+            if mida >= min_px:
+                files.append([pid, round(lat, 3), round(lon, 3), vel, rumb])
+        sortida[k] = files
+        for pid in [q for q, p in pistes.items() if k - p["k"] > 2]:
+            del pistes[pid]
+    return sortida
+
+
 def nivell(a):
     d, mm = a["enganxada_min"], a["mm_mitjana"]
     if d >= 120 and mm >= 40:
@@ -104,6 +247,7 @@ def main():
     ap.add_argument("--min-px", type=int, default=12, help="àrea mínima en píxels de radar (~6,9 km2 cadascun)")
     ap.add_argument("--bbox", type=float, nargs=4, default=BBOX_CAT, metavar=("LON0", "LAT0", "LON1", "LAT1"))
     ap.add_argument("--historial", type=float, default=48, help="hores d'historial a calcular (0 = només l'últim)")
+    ap.add_argument("--hores-moviment", type=float, default=6, help="hores de moviment (rastres) a exportar (0 = no)")
     ap.add_argument("--no-refl", action="store_true", help="no genera les imatges de reflectivitat")
     ap.add_argument("--dist-costa", type=float, default=20,
                     help="km: cel·les a més d'aquesta distància de la terra es marquen com a 'mar' i no fan avís")
@@ -205,6 +349,15 @@ def main():
         for f in refl.glob("*.png"):          # neteja el que surt de la finestra
             if f.stem < clau_min:
                 f.unlink()
+    if a.hores_moviment > 0:
+        k_min = next((kk for kk in range(len(ts)) if (fi - ts[kk]).total_seconds() <= a.hores_moviment * 3600), 0)
+        seg = segueix(cub, ok, lb, ts, a.llindar, a.min_px, k_min_vel=k_min)
+        fr = {ts[kk].strftime("%Y%m%d%H%M"): v for kk, v in seg.items()
+              if (fi - ts[kk]).total_seconds() <= a.hores_moviment * 3600}
+        (tmp / "moviment.json").write_text(json.dumps({
+            "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "pas_min": P.PAS_MIN, "hores": a.hores_moviment,
+            "columnes": ["id", "lat", "lon", "vel_kmh", "rumb"], "frames": fr,
+        }, separators=(",", ":")))
     (tmp / "avisos.json").write_text(json.dumps({
         "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "bounds": lb,
         "parametres": {"llindar_classe": a.llindar, "min_area_km2": round(a.min_px * 6.9),
