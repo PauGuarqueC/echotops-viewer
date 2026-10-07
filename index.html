@@ -830,8 +830,7 @@ function initMap(){
       const div = L.DomUtil.create('div', 'basemap-control');
       div.className += ' nowc-ctl';
       div.innerHTML = `<div class="nowc-cap"><span>Capes</span><span class="nowc-fl">▾</span></div><div class="nowc-body">
-        <div class="nowc-sec">Imatge de fons</div>
-        <select id="capa-sel" style="width:100%;margin-top:3px;">
+        <select id="capa-sel" style="display:none;">
           <option value="echo">Echotops (Meteocat)</option>
           <option value="refl">Reflectivitat radar (AEMET)</option>
           <option value="sat">Satèl·lit IR 10,5 µm (MTG)</option>
@@ -902,6 +901,73 @@ function initMap(){
     },
   });
   map.addControl(new NowcastControl());
+
+  // ---- Selector de fons: dos botons (Observació / Predicció) a dalt a l'esquerra. El <select id="capa-sel"> (ocult) continua sent la font de veritat ----
+  (function(){
+    const OBS = [['echo', 'Echotops (Meteocat)'], ['refl', 'Reflectivitat radar (AEMET)'], ['sat', 'Satèl·lit IR 10,5 µm (MTG)'], ['echo+sat', 'Echotops + satèl·lit'], ['refl+sat', 'Reflectivitat + satèl·lit']];
+    const st = document.createElement('style');
+    st.textContent = `
+      .fons-ctl{ background:var(--panel,#fff); border:1px solid var(--panel-border,#ccc); border-radius:3px; box-shadow:0 1px 5px rgba(0,0,0,.25);
+        font:13px/1.3 var(--font-ui, sans-serif); color:var(--text,#222); position:fixed; left:10px; top:70px; z-index:1100; }
+      .fons-ctl .fons-tabs{ display:flex; }
+      .fons-ctl .fons-tab{ flex:1; padding:7px 14px; border:0; background:transparent; color:inherit; font:inherit; cursor:pointer; white-space:nowrap; }
+      .fons-ctl .fons-tab + .fons-tab{ border-left:1px solid var(--panel-border,#ccc); }
+      .fons-ctl .fons-tab:hover{ color:#C8102E; }
+      .fons-ctl .fons-tab.act{ font-weight:600; color:#C8102E; box-shadow:inset 0 -2px 0 #C8102E; }
+      .fons-ctl .fons-tab[disabled]{ opacity:.45; cursor:default; color:inherit; }
+      .fons-ctl .fons-llista{ display:none; border-top:1px solid var(--panel-border,#ccc); padding:4px 0; min-width:230px; }
+      .fons-ctl .fons-llista.obert{ display:block; }
+      .fons-ctl .fons-it{ display:flex; gap:8px; align-items:center; padding:5px 12px; cursor:pointer; }
+      .fons-ctl .fons-it:hover{ background:rgba(200,16,46,.07); }
+      .fons-ctl .fons-it .pt{ width:8px; height:8px; border-radius:50%; border:1px solid #888; flex:none; }
+      .fons-ctl .fons-it.sel .pt{ background:#C8102E; border-color:#C8102E; }
+      .fons-ctl .fons-it.sel{ font-weight:600; }
+      .fons-ctl .fons-sep{ padding:4px 12px 2px; font-size:11px; letter-spacing:.04em; text-transform:uppercase; opacity:.6; }`;
+    document.head.appendChild(st);
+    const cs = document.getElementById('capa-sel');
+    const d = document.createElement('div');
+    d.className = 'fons-ctl';
+    d.innerHTML = '<div class="fons-tabs"><button type="button" class="fons-tab" data-t="obs" aria-expanded="false">Observació</button>' +
+      '<button type="button" class="fons-tab" data-t="pre" aria-expanded="false">Predicció</button></div><div class="fons-llista"></div>';
+    document.body.appendChild(d);
+    L.DomEvent.disableClickPropagation(d); L.DomEvent.disableScrollPropagation(d);
+    const posa = () => { const tb = document.getElementById('topbar'); d.style.top = ((tb ? tb.getBoundingClientRect().bottom : 0) + 10) + 'px'; };   // sota la capçalera
+    posa(); window.addEventListener('resize', posa); window.addEventListener('orientationchange', posa); setTimeout(posa, 500);
+    const ll = d.querySelector('.fons-llista'), tabs = [...d.querySelectorAll('.fons-tab')];
+    let obert = null;
+    const llistaPre = () => {
+      const out = [];
+      Object.keys(mod.models || {}).forEach(k => { const M = mod.models[k];
+        out.push(['sep', M.nom]); out.push([`mod:${k}:h`, 'Pluja horària']); out.push([`mod:${k}:a`, 'Pluja acumulada']); });
+      return out;
+    };
+    const pinta = t => {
+      const items = t === 'obs' ? OBS : llistaPre(), cur = refl.mode;
+      ll.innerHTML = items.map(([v, n]) => v === 'sep' ? `<div class="fons-sep">${n}</div>` : `<div class="fons-it${v === cur ? ' sel' : ''}" data-v="${v}"><span class="pt"></span><span>${n}</span></div>`).join('');
+    };
+    const sync = () => {
+      const esPre = String(refl.mode).indexOf('mod:') === 0, hiHaModels = Object.keys(mod.models || {}).length > 0;
+      tabs.forEach(b => { const pre = b.dataset.t === 'pre'; b.classList.toggle('act', pre === esPre); b.disabled = pre && !hiHaModels; b.title = (pre && !hiHaModels) ? 'Previsió no disponible' : ''; });
+      if (obert) pinta(obert);
+    };
+    const tanca = () => { obert = null; ll.classList.remove('obert'); tabs.forEach(b => b.setAttribute('aria-expanded', 'false')); };
+    tabs.forEach(b => b.addEventListener('click', () => {
+      if (b.disabled) return;
+      if (obert === b.dataset.t){ tanca(); return; }
+      obert = b.dataset.t; pinta(obert); ll.classList.add('obert');
+      tabs.forEach(x => x.setAttribute('aria-expanded', String(x === b)));
+    }));
+    ll.addEventListener('click', e => {
+      const it = e.target.closest('.fons-it'); if (!it) return;
+      const v = it.dataset.v;
+      if (cs.querySelector(`option[value="${v}"]`)){ cs.value = v; cs.dispatchEvent(new Event('change')); }
+      sync(); tanca();
+    });
+    document.addEventListener('click', e => { if (obert && !d.contains(e.target)) tanca(); });
+    cs.addEventListener('change', sync);
+    window.fonsSync = sync;
+    sync();
+  })();
 
   // Mòbil: alça els controls inferiors per damunt de la barra de temps i baixa els avisos sota la capçalera
   function nowcAjustaMobil(){
@@ -1293,10 +1359,11 @@ function initMap(){
     }
     if (mod.pendent){
       const p = mod.pendent; mod.pendent = null;
-      if (cs.querySelector(`option[value="${p}"]`)){ refl.mode = p; cs.value = p; mod.aplica(); reflMostra(); satMostra(); modMostra(); return; }
+      if (cs.querySelector(`option[value="${p}"]`)){ refl.mode = p; cs.value = p; mod.aplica(); reflMostra(); satMostra(); modMostra(); if (window.fonsSync) window.fonsSync(); return; }
     }
     if (mod.sel && !(modK() in mod.models)){ refl.mode = 'echo'; cs.value = 'echo'; mod.aplica(); reflMostra(); satMostra(); }
     modMostra();
+    if (window.fonsSync) window.fonsSync();
   }
 
   async function modCarrega(k){
