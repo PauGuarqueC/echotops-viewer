@@ -2290,33 +2290,40 @@ function initMap(){
     tog.addEventListener('change', () => activa(tog.checked));
     activa(tog.checked);
   })();
-  // ---- Barra de temps unificada (observacio passada + ara + previsio, estil Windy): -48 h .. +48 h. Nomes en mode "live"; en arxiu es fa servir l'scrubber de sempre ----
+  // ---- Barra de temps unificada: Observacio (-48 h .. Ara) i Previsio (Ara .. +48 h). Nomes en mode "live"; en arxiu es fa servir l'scrubber de sempre ----
   (function(){
-    const tp = document.getElementById('timeline-panel'), old = document.getElementById('scrubber'), pb = document.getElementById('playbtn');
-    if (!tp || !old || !pb) return;
+    const tp = document.getElementById('timeline-panel'), old = document.getElementById('scrubber'), pb = document.getElementById('playbtn'), rd = document.getElementById('timeline-readout');
+    if (!tp || !old || !pb || !rd) return;
     const st = document.createElement('style');
-    st.textContent = '#tl2-wrap{flex:1 1 auto;min-width:0;position:relative;padding-top:2px;}' +
-      '@media (max-width:640px){#tl2-wrap{flex:1 0 100%;}}' +
-      '#tl2{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:pointer;margin:0;display:block;}' +
-      '#tl2::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,#c9d3da 0,#c9d3da 50%,#f6c26b 50%,#f6c26b 100%);}' +
-      '#tl2::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,#c9d3da 0,#c9d3da 50%,#f6c26b 50%,#f6c26b 100%);}' +
-      '#tl2::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;background:#C8102E;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5);}' +
-      '#tl2::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:#C8102E;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5);}' +
-      '#tl2.fut::-webkit-slider-thumb{background:#e08a00;}#tl2.fut::-moz-range-thumb{background:#e08a00;}' +
-      '.tl2-ara{position:absolute;left:50%;top:3px;width:2px;height:16px;background:#C8102E;opacity:.7;pointer-events:none;transform:translateX(-50%);}' +
-      '.tl2-lbl{position:relative;height:12px;font-size:10px;color:var(--text-dim,#7b8794);}' +
+    st.textContent = '#timeline-panel{flex-wrap:wrap !important;}' +
+      '#tl2-wrap{flex:1 0 100%;width:100%;box-sizing:border-box;position:relative;padding-top:1px;}' +
+      '#tl2{-webkit-appearance:none;appearance:none;width:100%;height:14px;background:transparent;cursor:pointer;margin:0;display:block;}' +
+      '#tl2::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:#c9d3da;}' +
+      '#tl2::-moz-range-track{height:3px;border-radius:2px;background:#c9d3da;}' +
+      '#tl2.prev::-webkit-slider-runnable-track{background:#f6c26b;}#tl2.prev::-moz-range-track{background:#f6c26b;}' +
+      '#tl2::-webkit-slider-thumb{-webkit-appearance:none;box-sizing:border-box;width:12px;height:12px;margin-top:-4.5px;border-radius:50%;background:#C8102E;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5);}' +
+      '#tl2::-moz-range-thumb{box-sizing:border-box;width:12px;height:12px;border-radius:50%;background:#C8102E;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5);}' +
+      '#tl2.prev::-webkit-slider-thumb{background:#e08a00;}#tl2.prev::-moz-range-thumb{background:#e08a00;}' +
+      '.tl2-lbl{position:relative;height:11px;font-size:9px;line-height:11px;color:var(--text-dim,#7b8794);}' +
       '.tl2-lbl span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap;}' +
-      '.tl2-lbl span:first-child{transform:none;}.tl2-lbl span:last-child{transform:translateX(-100%);}';
+      '.tl2-lbl span:first-child{transform:none;}.tl2-lbl span:last-child{transform:translateX(-100%);}' +
+      '.tl2-mode{display:inline-flex;margin-right:8px;border:1px solid #c9d3da;border-radius:12px;overflow:hidden;font-size:11px;vertical-align:middle;}' +
+      '.tl2-mode button{border:0;background:transparent;padding:2px 10px;cursor:pointer;color:inherit;font:inherit;}' +
+      '.tl2-mode button.on{color:#fff;}.tl2-mode button[data-m="obs"].on{background:#52606d;}.tl2-mode button[data-m="prev"].on{background:#e08a00;}';
     document.head.appendChild(st);
     const wrap = document.createElement('div'); wrap.id = 'tl2-wrap'; wrap.style.display = 'none';
-    wrap.innerHTML = '<div class="tl2-ara"></div><input type="range" id="tl2" min="-480" max="480" step="1" value="0">' +
-      '<div class="tl2-lbl"><span style="left:0%">−48 h</span><span style="left:25%">−24 h</span><span style="left:50%">Ara</span><span style="left:75%">+24 h</span><span style="left:100%">+48 h</span></div>';
+    wrap.innerHTML = '<input type="range" id="tl2" min="-480" max="0" step="1" value="0"><div class="tl2-lbl"></div>';
     old.parentNode.insertBefore(wrap, old.nextSibling);
-    const sl = document.getElementById('tl2');
-    const Q = 360000, N = 480;                              // passos de 6 min; -480..+480 = -48 h..+48 h
-    let Tsel = null, nowRef = Math.floor(Date.now() / Q) * Q, liveAnt = null, obsOcult = false, ocults = [], pend = null, dragging = false, ownPlay = false, ownTimer = null, warned = false;
+    const tgl = document.createElement('span'); tgl.className = 'tl2-mode'; tgl.style.display = 'none';
+    tgl.innerHTML = '<button type="button" data-m="obs">Observació</button><button type="button" data-m="prev">Previsió</button>';
+    rd.insertBefore(tgl, pb);
+    const sl = document.getElementById('tl2'), lbl = wrap.querySelector('.tl2-lbl');
+    const Q = 360000, N = 480;                              // passos de 6 min; 480 = 48 h
+    const LBL = { obs: [['−48 h', 0], ['−36 h', 25], ['−24 h', 50], ['−12 h', 75], ['Ara', 100]], prev: [['Ara', 0], ['+12 h', 25], ['+24 h', 50], ['+36 h', 75], ['+48 h', 100]] };
+    let modeT = 'obs', Tsel = null, nowRef = Math.floor(Date.now() / Q) * Q, liveAnt = null, modAnt = null, obsOcult = false, ocults = [], pend = null, dragging = false, ownPlay = false, ownTimer = null, warned = false;
     const dFmt = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const modSel = () => (typeof mod !== 'undefined' && mod && mod.sel) ? mod : null;
+    const tlTval = () => modeT === 'prev' ? (Tsel !== null ? Tsel : nowRef) : Tsel;      // en observacio, null = segueix l'ultim fotograma
     function escriuHora(T){
       const pc = {}; dFmt.formatToParts(new Date(T)).forEach(x => { pc[x.type] = x.value; });
       const a = document.getElementById('ts-date'), b = document.getElementById('ts-time'), c = document.getElementById('ts-utc');
@@ -2324,7 +2331,7 @@ function initMap(){
       if (b) b.textContent = pc.hour + ':' + pc.minute;
       if (c) c.textContent = new Date(T).toISOString().slice(11, 16) + ' UTC · previsió';
     }
-    function ocultaObs(on){                                  // al futur no hi ha observacio: s'amaguen les capes d'observacio
+    function ocultaObs(on){                                  // en previsio no hi ha observacio: s'amaguen les capes d'observacio
       if (on){
         const els = [];
         try{ if (currentOverlay && currentOverlay.getElement) els.push(currentOverlay.getElement()); }catch(_){}
@@ -2338,37 +2345,60 @@ function initMap(){
       }
       obsOcult = on;
     }
-    function aplica(){
-      if (Tsel === null) return;
-      const T = Tsel, m = modSel();
-      if (T > Date.now()){
+    function aplica(force){
+      const m = modSel();
+      if (modeT === 'prev'){
+        const T = Tsel !== null ? Tsel : nowRef;
         ocultaObs(true);
         if (m){ const h = Math.round(T / 3600000) * 3600000; if (m.t !== h){ m.t = h; modMostra(); } }
         escriuHora(T);
       } else {
         if (obsOcult) ocultaObs(false);
-        let best = -1, bd = Infinity;
-        for (let i = 0; i < visibleTimestamps.length; i++){ const d = Math.abs(tsToDate(visibleTimestamps[i]).getTime() - T); if (d < bd){ bd = d; best = i; } }
-        if (best >= 0 && visibleTimestamps[best] !== currentTs) showFrame(best);
+        if (!visibleTimestamps.length) return;
+        let best = visibleTimestamps.length - 1;
+        if (Tsel !== null){
+          let bd = Infinity;
+          for (let i = 0; i < visibleTimestamps.length; i++){ const d = Math.abs(tsToDate(visibleTimestamps[i]).getTime() - Tsel); if (d < bd){ bd = d; best = i; } }
+        }
+        if (force || visibleTimestamps[best] !== currentTs) showFrame(best);
       }
+    }
+    function setMode(m){
+      modeT = m; stopPlay(); Tsel = null; window.tlT = tlTval();
+      sl.min = m === 'prev' ? 0 : -N; sl.max = m === 'prev' ? N : 0; sl.value = 0;
+      sl.classList.toggle('prev', m === 'prev');
+      lbl.innerHTML = LBL[m].map(x => '<span style="left:' + x[1] + '%">' + x[0] + '</span>').join('');
+      tgl.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.getAttribute('data-m') === m));
+      aplica(true);
     }
     function stopPlay(){ if (!ownPlay) return; ownPlay = false; clearInterval(ownTimer); pb.textContent = '▶ REPRODUIR'; }
     function startPlay(){
       ownPlay = true; pb.textContent = '⏸ PAUSA';
       ownTimer = setInterval(() => {
-        let T = Tsel !== null ? Tsel : (currentTs ? tsToDate(currentTs).getTime() : Date.now());
-        T += (T < Date.now() ? 30 : 60) * 60000;
-        if (T > nowRef + N * Q) T = nowRef - N * Q;
-        Tsel = T; window.tlT = T; aplica();
+        const alFinal = Tsel === null;                       // observacio: ultim fotograma; previsio: Ara
+        let T;
+        if (modeT === 'prev'){
+          T = (Tsel !== null ? Tsel : nowRef) + 3600000;
+          Tsel = T > nowRef + N * Q ? null : T;
+        } else {
+          if (alFinal){ T = nowRef - N * Q; }
+          else { T = Tsel + 1800000; }
+          Tsel = T >= nowRef ? null : T;
+        }
+        window.tlT = tlTval(); aplica();
       }, 700);
     }
     sl.addEventListener('input', () => {
       stopPlay();
-      Tsel = nowRef + (+sl.value) * Q; window.tlT = Tsel;
+      const v = +sl.value;
+      if (modeT === 'prev') Tsel = v <= 0 ? null : nowRef + v * Q;
+      else Tsel = v >= 0 ? null : nowRef + v * Q;
+      window.tlT = tlTval();
       if (!pend) pend = requestAnimationFrame(() => { pend = null; aplica(); });
     });
     sl.addEventListener('pointerdown', () => { dragging = true; });
     window.addEventListener('pointerup', () => { dragging = false; });
+    tgl.addEventListener('click', e => { const b = e.target.closest('button'); if (b && b.getAttribute('data-m') !== modeT) setMode(b.getAttribute('data-m')); });
     pb.addEventListener('click', e => {
       if (typeof mode === 'undefined' || mode !== 'live') return;     // arxiu: comportament de sempre
       e.stopImmediatePropagation(); e.preventDefault();
@@ -2379,24 +2409,26 @@ function initMap(){
         const live = (mode === 'live');
         nowRef = Math.floor(Date.now() / Q) * Q;
         if (live !== liveAnt){
-          liveAnt = live;
-          wrap.style.display = live ? '' : 'none';
-          old.style.display = live ? 'none' : '';
+          liveAnt = live; modAnt = null;
+          wrap.style.display = live ? '' : 'none'; tgl.style.display = live ? '' : 'none'; old.style.display = live ? 'none' : '';
           ['mod-prev', 'mod-t', 'mod-next', 'mod-ara'].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = live ? 'none' : ''; });
           if (!live){ stopPlay(); Tsel = null; window.tlT = null; if (obsOcult) ocultaObs(false); }
         }
         if (!live) return;
-        const fut = Tsel !== null && Tsel > Date.now();
-        if (fut){                                                      // re-afirma l'estat de futur si una actualitzacio del manifest el trenca
-          ocultaObs(true); escriuHora(Tsel);
-          const m = modSel(); if (m){ const h = Math.round(Tsel / 3600000) * 3600000; if (m.t !== h){ m.t = h; modMostra(); } }
+        const hasMod = !!modSel();
+        if (hasMod !== modAnt){ modAnt = hasMod; setMode(hasMod ? 'prev' : 'obs'); }
+        window.tlT = tlTval();
+        if (modeT === 'prev'){                                          // re-afirma l'estat de previsio si una actualitzacio del manifest el trenca
+          ocultaObs(true); escriuHora(Tsel !== null ? Tsel : nowRef);
+          const m = modSel(); if (m){ const h = Math.round((Tsel !== null ? Tsel : nowRef) / 3600000) * 3600000; if (m.t !== h){ m.t = h; modMostra(); } }
         }
         if (!dragging){
-          const Tc = Tsel !== null ? Tsel : (currentTs ? tsToDate(currentTs).getTime() : Date.now());
-          const v = Math.max(-N, Math.min(N, Math.round((Tc - nowRef) / Q)));
+          let Tc;
+          if (modeT === 'prev') Tc = Tsel !== null ? Tsel : nowRef;
+          else Tc = Tsel !== null ? Tsel : (currentTs ? tsToDate(currentTs).getTime() : nowRef);
+          const v = modeT === 'prev' ? Math.max(0, Math.min(N, Math.round((Tc - nowRef) / Q))) : Math.max(-N, Math.min(0, Math.round((Tc - nowRef) / Q)));
           if (+sl.value !== v) sl.value = v;
         }
-        sl.classList.toggle('fut', fut);
       }catch(e){ if (!warned){ warned = true; console.warn('Barra de temps unificada:', e); } }
     }, 300);
   })();
