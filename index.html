@@ -2371,6 +2371,23 @@ function initMap(){
       tgl.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.getAttribute('data-m') === m));
       aplica(true);
     }
+    let ultObs = 'echo', ultPrev = null;                     // ultima capa d'observacio i de previsio triades
+    const capaSel = () => (typeof mod !== 'undefined' && mod && mod.cs) ? mod.cs : null;
+    function triaCapa(m){                                     // el selector Observacio/Previsio tria una capa del tipus corresponent
+      const cs = capaSel(); if (!cs) return;
+      let v = null;
+      if (m === 'prev'){
+        if (modSel()) return;                                 // ja hi ha una capa de model
+        if (ultPrev && cs.querySelector('option[value="' + ultPrev + '"]')) v = ultPrev;
+        else { const o = cs.querySelector('optgroup[data-mod] option'); if (o) v = o.value; }
+      } else {
+        if (!modSel()) return;                                // ja hi ha una capa d'observacio
+        v = cs.querySelector('option[value="' + ultObs + '"]') ? ultObs : 'echo';
+      }
+      if (v === null || cs.value === v) return;
+      cs.value = v; cs.dispatchEvent(new Event('change', { bubbles: true }));
+      try{ if (typeof refl !== 'undefined' && refl.mode !== v){ refl.mode = v; if (mod.aplica) mod.aplica(); reflMostra(); satMostra(); modMostra(); if (window.fonsSync) window.fonsSync(); } }catch(_){}
+    }
     function stopPlay(){ if (!ownPlay) return; ownPlay = false; clearInterval(ownTimer); pb.textContent = '▶ REPRODUIR'; }
     function startPlay(){
       ownPlay = true; pb.textContent = '⏸ PAUSA';
@@ -2398,7 +2415,11 @@ function initMap(){
     });
     sl.addEventListener('pointerdown', () => { dragging = true; });
     window.addEventListener('pointerup', () => { dragging = false; });
-    tgl.addEventListener('click', e => { const b = e.target.closest('button'); if (b && b.getAttribute('data-m') !== modeT) setMode(b.getAttribute('data-m')); });
+    tgl.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      const m = b.getAttribute('data-m'); if (m === modeT) return;
+      triaCapa(m); modAnt = !!modSel(); setMode(m);
+    });
     pb.addEventListener('click', e => {
       if (typeof mode === 'undefined' || mode !== 'live') return;     // arxiu: comportament de sempre
       e.stopImmediatePropagation(); e.preventDefault();
@@ -2415,6 +2436,7 @@ function initMap(){
           if (!live){ stopPlay(); Tsel = null; window.tlT = null; if (obsOcult) ocultaObs(false); }
         }
         if (!live) return;
+        const cs0 = capaSel(); if (cs0 && cs0.value){ if (cs0.value.indexOf('mod:') === 0) ultPrev = cs0.value; else ultObs = cs0.value; }
         const hasMod = !!modSel();
         if (hasMod !== modAnt){ modAnt = hasMod; setMode(hasMod ? 'prev' : 'obs'); }
         window.tlT = tlTval();
