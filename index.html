@@ -2157,7 +2157,7 @@ function initMap(){
     const pane = map.createPane('smpPane'); pane.style.zIndex = 450;
     const wrap = document.createElement('div');
     wrap.style.marginTop = '8px';
-    wrap.innerHTML = '<label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="smp-toggle" checked style="margin-top:2px"> <span>Avisos Meteocat (comarques)</span></label>' +
+    wrap.innerHTML = '<label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="smp-toggle" style="margin-top:2px"> <span>Avisos Meteocat (comarques)</span></label>' +
       '<div id="smp-ctl" style="display:none;margin-top:4px;">' +
         '<div style="display:flex;align-items:center;gap:4px;">' +
           '<button type="button" id="smp-prev" title="Hora anterior" style="padding:2px 8px;">◀</button>' +
@@ -2201,15 +2201,15 @@ function initMap(){
     }
     function popup(f){
       const id = idDe(f), ms = msAra(), ara = Date.now(), nom = f.properties.nom_comar || ('Comarca ' + id);
-      const llista = D ? D.periodes.filter(p => p.comarques[id] && Date.parse(p.fi) > ara).sort((a, b) => a.ini < b.ini ? -1 : 1) : [];
+      const llista = D ? D.periodes.filter(p => p.comarques[id] && ms >= Date.parse(p.ini) && ms < Date.parse(p.fi)).sort((a, b) => a.ini < b.ini ? -1 : 1) : [];
       let h = '<div style="font:12px/1.5 var(--font-ui,sans-serif);min-width:230px;max-width:300px"><b>' + nom + '</b>';
-      if (!llista.length) return h + '<br><span style="opacity:.7">Cap avís del Meteocat per a aquesta comarca.</span></div>';
+      if (!llista.length) return h + '<br><span style="opacity:.7">Cap avís actiu en aquesta hora.</span></div>';
       h += llista.map(p => {
         const x = p.comarques[id], i = Date.parse(p.ini), fi = Date.parse(p.fi);
         const act = ms >= i && ms < fi;
         const estat = i > ara ? ' (previsió)' : ' (vigent)';
         return '<div style="margin-top:6px;padding:3px 6px;border-left:4px solid ' + COL[Math.min(x.nivell, 2)] + ';' + (act ? 'background:rgba(128,128,128,.22);' : '') + '">' +
-          '<b>' + etiq(p) + '</b>' + estat + (act ? ' ◄ mostrat' : '') + '<br>' + p.meteor + '<br>' + x.llindar + ' · perill ' + x.perill + '</div>';
+          '<b>' + etiq(p) + '</b>' + estat + '' + '<br>' + p.meteor + '<br>' + x.llindar + ' · perill ' + x.perill + '</div>';
       }).join('');
       return h + '<div style="margin-top:6px;opacity:.6;font-size:10px">Hores locals · Meteocat</div></div>';
     }
