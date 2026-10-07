@@ -2148,6 +2148,74 @@ function initMap(){
     window.acaMostra = t => { ts = t; if (tog && tog.checked) pinta(); };
     if (tog) { tog.addEventListener('change', () => activa(tog.checked)); activa(tog.checked); }
   })();
+  // ---- Avisos SMP del Meteocat per comarques (data/smp/avisos.json, generat per smp_collector.py): segueixen la barra de temps ----
+  (function(){
+    const COL = ['#888888', '#F2C200', '#F28C00', '#C8102E', '#7B1FA2'];    // perill 0..4
+    const ref = document.getElementById('aca-info');
+    if (!ref) return;
+    const pane = map.createPane('smpPane'); pane.style.zIndex = 450;
+    const wrap = document.createElement('div');
+    wrap.style.marginTop = '8px';
+    wrap.innerHTML = '<label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="smp-toggle" checked style="margin-top:2px"> <span>Avisos Meteocat (comarques)</span></label>' +
+                     '<div id="smp-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>';
+    ref.parentNode.insertBefore(wrap, ref.nextSibling);
+    const tog = document.getElementById('smp-toggle'), info = document.getElementById('smp-info');
+    let cap = null, D = null, tsS = null, timer = null;
+    const idDe = f => parseInt(f.properties.comarca, 10);
+    function msDe(t){
+      const q = t.replace('_', '');
+      return Date.UTC(+q.slice(0, 4), +q.slice(4, 6) - 1, +q.slice(6, 8), +q.slice(8, 10), +q.slice(10, 12));
+    }
+    function vigents(ms){                                   // idComarca -> avís de més perill vigent a l'instant ms
+      const r = {};
+      if (!D) return r;
+      D.periodes.forEach(p => {
+        if (ms < Date.parse(p.ini) || ms >= Date.parse(p.fi)) return;
+        Object.keys(p.comarques).forEach(c => {
+          const x = p.comarques[c], o = r[c];
+          if (!o || x.perill > o.perill) r[c] = { perill: x.perill, nivell: x.nivell, meteor: p.meteor, llindar: x.llindar };
+        });
+      });
+      return r;
+    }
+    function pinta(){
+      if (!cap || !tog.checked) return;
+      const n = vigents(tsS ? msDe(tsS) : Date.now());
+      const per = {}, mets = {};
+      cap.eachLayer(l => {
+        const x = n[idDe(l.feature)];
+        if (!x) { l.setStyle({ stroke: false, fillOpacity: 0 }); return; }
+        const c = COL[Math.min(x.perill, 4)];
+        l.setStyle({ stroke: true, color: c, weight: 2, opacity: 0.9, fillColor: c, fillOpacity: 0.28 });
+        (per[x.perill] = per[x.perill] || []).push(l.feature.properties.nom_comar);
+        mets[x.meteor] = 1;
+      });
+      if (!D) info.textContent = 'Sense dades dels avisos';
+      else if (!Object.keys(per).length) info.textContent = 'Cap comarca amb avís del Meteocat en aquest instant';
+      else info.innerHTML = Object.keys(per).sort((a, b) => b - a).map(p =>
+          '<span style="color:' + COL[Math.min(+p, 4)] + '">&#9632;</span> Perill ' + p + ': ' + per[p].sort().join(', ')).join('<br>') +
+        '<br><span style="opacity:.7">' + Object.keys(mets).join(', ') + ' · Meteocat</span>';
+    }
+    function carrega(){
+      const g = cap ? Promise.resolve(null) : fetch('data/comarques.geojson').then(r => r.json());
+      const a = fetch('data/smp/avisos.json?_=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
+      Promise.all([g, a]).then(([gj, d]) => {
+        D = d;
+        if (gj && !cap) cap = L.geoJSON(gj, { pane: 'smpPane', interactive: false, style: () => ({ stroke: false, fillOpacity: 0 }) });
+        if (tog.checked && cap && !map.hasLayer(cap)) cap.addTo(map);
+        pinta();
+      }).catch(() => { info.textContent = 'Sense dades dels avisos'; });
+    }
+    function activa(on){
+      clearInterval(timer);
+      if (on) { carrega(); timer = setInterval(carrega, 10 * 60 * 1000); }
+      else { if (cap) map.removeLayer(cap); info.textContent = ''; }
+    }
+    const prev = window.acaMostra;
+    window.acaMostra = t => { if (prev) prev(t); tsS = t; pinta(); };
+    tog.addEventListener('change', () => activa(tog.checked));
+    activa(tog.checked);
+  })();
   // ---- fi Tempestes enganxades ----
 
 
