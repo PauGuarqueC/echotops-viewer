@@ -2037,8 +2037,8 @@ function initMap(){
       const l30 = H.llindars['30min'], l3 = H.llindars['3h'], li = H.llindars.intensitat || 15;
       return (a30 > l30[1] || a3h > l3[1]) ? 3 : (a30 > l30[0] || a3h > l3[0]) ? 2 : (inten > li) ? 1 : 0;
     }
-    function estat(e, k){                                  // estat de l'estació a l'índex de temps k
-      const a = e.i; let a30 = 0, a3 = 0, j0 = -1;
+    function estat(a, k, base){                                  // estat de l'estació a l'índex de temps k
+      let a30 = 0, a3 = 0, j0 = -1;
       for (let j = 0; j < 36 && k - j >= 0; j++) {
         const v = a[k - j];
         if (v === null || v === undefined) continue;
@@ -2047,7 +2047,7 @@ function initMap(){
       }
       if (j0 < 0) return { n: 0, i: null, a30: null, a3h: null, t: null };
       a30 /= 12; a3 /= 12;
-      return { n: nivell(a30, a3, a[k - j0]), i: a[k - j0], a30, a3h: a3, t: ms0 + (k - j0) * H.pas * 60000 };
+      return { n: nivell(a30, a3, a[k - j0]), i: a[k - j0], a30, a3h: a3, t: base + (k - j0) * H.pas * 60000 };
     }
     function html(e){
       const c = e.cur, n = c.n;
@@ -2059,13 +2059,21 @@ function initMap(){
     }
     function pinta(){
       if (!H) return;
-      let k = ts ? Math.round((nowcMs(ts.replace('_', '')) - ms0) / (H.pas * 60000)) : H.estacions[0].i.length - 1;
-      const nmax = H.estacions[0].i.length - 1;
+      const msSel = ts ? nowcMs(ts.replace('_', '')) : null;
+      let ar = null;                                       // font d'arxiu (dies/*.json) si l'instant queda fora de l'historic en viu
+      if (msSel !== null && msSel < ms0 + 3 * 3600000) {
+        ar = arxiuPer(msSel);
+        if (!ar) { if (info) info.textContent = "Carregant l'arxiu dels pluviometres..."; return; }
+      }
+      const base = ar ? ar.ms0 : ms0;
+      let k = ts ? Math.round((msSel - base) / (H.pas * 60000)) : H.estacions[0].i.length - 1;
+      const nmax = ar ? ar.n - 1 : H.estacions[0].i.length - 1;
       if (k > nmax) k = nmax;
       let nav = 0;
       marcs.forEach(o => {
         const { e, m, p } = o;
-        e.cur = k < 0 ? { n: 0, i: null, a30: null, a3h: null, t: null } : estat(e, k);
+        const serie = ar ? (ar.s[e.id] || null) : e.i;
+        e.cur = (k < 0 || !serie) ? { n: 0, i: null, a30: null, a3h: null, t: null } : estat(serie, k, base);
         const n = e.cur.n;
         if (n) {                                            // en avís: etiqueta ovalada amb el valor que ha superat el llindar
           const l30 = H.llindars['30min'][0], l3 = H.llindars['3h'][0];
@@ -2086,6 +2094,31 @@ function initMap(){
       });
       if (info) info.textContent = nav ? `${nav} pluviòmetre${nav > 1 ? 's' : ''} en avís (prealerta > ${H.llindars.intensitat || 15} mm/h · 30 min > ${H.llindars['30min'][0]} mm · 3 h > ${H.llindars['3h'][0]} mm)` :
                                          `${marcs.length} pluviòmetres · cap supera els llindars`;
+    }
+    const DIES = {};                                       // dia (AAAA-MM-DD) -> JSON | 'pend' | null (no existeix)
+    let ARX = null;                                        // finestra d'arxiu: { key, ms0, n, s: {id: [...]} }
+    const diaStr = ms => new Date(ms).toISOString().slice(0, 10);
+    function arxiuPer(msSel){                              // dades de dies/*.json per a l'instant msSel (+3 h d'escalfament)
+      const d0 = diaStr(msSel - 3 * 3600000), d1 = diaStr(msSel), key = d0 + '|' + d1;
+      if (ARX && ARX.key === key) return ARX;
+      const dies = d0 === d1 ? [d0] : [d0, d1];
+      dies.forEach(dia => {
+        if (dia in DIES) return;
+        DIES[dia] = 'pend';
+        fetch('data/aca/dies/' + dia + '.json').then(r => r.ok ? r.json() : null).catch(() => null)
+          .then(j => { DIES[dia] = j; pinta(); });
+      });
+      if (dies.some(dia => DIES[dia] === 'pend')) return null;
+      const n = dies.length * 288, s = {};
+      dies.forEach((dia, q) => {
+        const j = DIES[dia]; if (!j) return;
+        Object.keys(j.v).forEach(id => {
+          const arr = s[id] || (s[id] = new Array(n).fill(null));
+          j.v[id].forEach((v, x) => { arr[q * 288 + x] = v; });
+        });
+      });
+      ARX = { key: key, ms0: Date.parse(dies[0] + 'T00:00:00Z'), n: n, s: s };
+      return ARX;
     }
     function dades(d){
       H = d; ms0 = Date.parse(d.t0);
