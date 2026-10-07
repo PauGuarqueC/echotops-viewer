@@ -168,15 +168,21 @@ RE_AROME = re.compile(r"arome_sfc_(\d{8})_(\d{2})\.grib2$")
 
 
 def exporta_arome(carpeta, sortida, forca, res_deg, bbox):
+    # Font preferida: arome_tp_AAAAMMDD_HH.npz (l'escriu arome_precip.py amb la pluja total d'AROME de Météo-France).
+    # Alternativa: arome_sfc_*.grib2 (descarregador del CTFC) si porta tp.
+    npz = sorted(glob.glob(os.path.join(carpeta, "arome_tp_*.npz")))
     cand = []
     for f in glob.glob(os.path.join(carpeta, "arome_sfc_*.grib2")):
         m = RE_AROME.search(os.path.basename(f))
         if m:
             cand.append((m.group(1) + m.group(2), f))
-    if not cand:
-        print("AROME: cap fitxer sfc a", carpeta)
+    cod_npz = re.search(r"arome_tp_(\d{8})_(\d{2})\.npz$", npz[-1]) if npz else None
+    cod_g = sorted(cand)[-1][0] if cand else ""
+    usa_npz = bool(cod_npz) and (cod_npz.group(1) + cod_npz.group(2)) >= cod_g
+    if not usa_npz and not cand:
+        print("AROME: cap fitxer a", carpeta)
         return None
-    cod, fitxer = sorted(cand)[-1]
+    cod, fitxer = ((cod_npz.group(1) + cod_npz.group(2), npz[-1]) if usa_npz else sorted(cand)[-1])
     run = datetime.strptime(cod, "%Y%m%d%H").replace(tzinfo=timezone.utc)
     run_txt = run.strftime("%Y-%m-%dT%H:%M:%SZ")
     dest = Path(sortida) / "arome"
@@ -188,29 +194,38 @@ def exporta_arome(carpeta, sortida, forca, res_deg, bbox):
                 return json.loads(meta_p.read_text())
         except Exception:
             pass
-    import eccodes as ec
     acum = {}
     lat1 = lon1 = dlat = dlon = ni = nj = None
-    with open(fitxer, "rb") as fh:
-        while True:
-            h = ec.codes_grib_new_from_file(fh)
-            if h is None:
-                break
-            sn = ec.codes_get(h, "shortName")
-            pid = ec.codes_get(h, "paramId")
-            if sn in ("tp", "tirf") or pid in (228, 260267):          # precipitació total acumulada
-                if lat1 is None:
-                    ni, nj = ec.codes_get(h, "Ni"), ec.codes_get(h, "Nj")
-                    lat1 = ec.codes_get(h, "latitudeOfFirstGridPointInDegrees")
-                    lon1 = ec.codes_get(h, "longitudeOfFirstGridPointInDegrees")
-                    dlat = ec.codes_get(h, "jDirectionIncrementInDegrees")
-                    dlon = ec.codes_get(h, "iDirectionIncrementInDegrees")
-                    if lon1 > 180:
-                        lon1 -= 360
-                acum[ec.codes_get(h, "endStep")] = np.array(ec.codes_get_values(h), dtype=np.float64).reshape(nj, ni)
-            ec.codes_release(h)
+    if usa_npz:
+        z = np.load(fitxer)
+        lat1, lon1, dlat, dlon = float(z["lat1"]), float(z["lon1"]), float(z["dlat"]), float(z["dlon"])
+        ni, nj = int(z["ni"]), int(z["nj"])
+        for p, arr in zip(z["passos"], z["acum"]):
+            acum[int(p)] = np.array(arr, dtype=np.float64)
+        if 0 not in acum:                                                     # H+0 no sempre existeix: acumulat 0
+            acum[0] = np.zeros((nj, ni))
+    else:
+        import eccodes as ec
+        with open(fitxer, "rb") as fh:
+            while True:
+                h = ec.codes_grib_new_from_file(fh)
+                if h is None:
+                    break
+                sn = ec.codes_get(h, "shortName")
+                pid = ec.codes_get(h, "paramId")
+                if sn in ("tp", "tirf") or pid in (228, 260267):          # precipitació total acumulada
+                    if lat1 is None:
+                        ni, nj = ec.codes_get(h, "Ni"), ec.codes_get(h, "Nj")
+                        lat1 = ec.codes_get(h, "latitudeOfFirstGridPointInDegrees")
+                        lon1 = ec.codes_get(h, "longitudeOfFirstGridPointInDegrees")
+                        dlat = ec.codes_get(h, "jDirectionIncrementInDegrees")
+                        dlon = ec.codes_get(h, "iDirectionIncrementInDegrees")
+                        if lon1 > 180:
+                            lon1 -= 360
+                    acum[ec.codes_get(h, "endStep")] = np.array(ec.codes_get_values(h), dtype=np.float64).reshape(nj, ni)
+                ec.codes_release(h)
     if not acum:
-        print("AROME: el GRIB no porta precipitació total (tp). Cal afegir-la al descarregador d'AROME.")
+        print("AROME: no hi ha precipitació total (tp). Executa arome_precip.py o afegeix-la al descarregador d'AROME.")
         return None
     passos = sorted(acum)
     from scipy.ndimage import map_coordinates
