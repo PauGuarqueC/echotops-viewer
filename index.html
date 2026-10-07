@@ -907,6 +907,15 @@ function initMap(){
     const OBS = [['echo', 'Echotops (Meteocat)'], ['refl', 'Reflectivitat radar (AEMET)'], ['sat', 'Satèl·lit IR 10,5 µm (MTG)'], ['echo+sat', 'Echotops + satèl·lit'], ['refl+sat', 'Reflectivitat + satèl·lit']];
     const st = document.createElement('style');
     st.textContent = `
+      #timeline-wrap{ padding:6px 12px 8px !important; }
+      #timeline-panel{ display:flex; align-items:center; gap:14px; max-width:660px !important; padding:5px 12px !important; }
+      #timeline-readout{ margin:0 !important; gap:12px; flex:0 0 auto; }
+      #timeline-readout .ts{ font-size:14px !important; white-space:nowrap; }
+      #timeline-readout .ts .date{ font-size:11px !important; margin-right:5px !important; }
+      #playbtn{ font-size:11px !important; padding:3px 9px !important; white-space:nowrap; }
+      #scrubber{ flex:1 1 auto; min-width:0; height:18px !important; }
+      #scrubber::-webkit-slider-thumb{ width:13px !important; height:13px !important; margin-top:-5px !important; }
+      @media (max-width:640px){ #timeline-panel{ flex-wrap:wrap; gap:2px 10px; } #scrubber{ flex:1 0 100%; } }
       .fons-ctl{ background:var(--panel,#fff); border:1px solid var(--panel-border,#ccc); border-radius:3px; box-shadow:0 1px 5px rgba(0,0,0,.25);
         font:15px/1.3 var(--font-ui, sans-serif); color:var(--text,#222); position:fixed; left:10px; top:70px; z-index:1100; }
       .fons-ctl .fons-tabs{ display:flex; }
@@ -917,7 +926,7 @@ function initMap(){
       .fons-ctl .fons-tab[disabled]{ opacity:.45; cursor:default; color:inherit; }
       .fons-ctl .fons-llista{ display:none; border-top:1px solid var(--panel-border,#ccc); padding:6px 0; min-width:270px; }
       .fons-ctl .fons-llista.obert{ display:block; }
-      .fons-ctl .fons-it{ display:flex; gap:10px; align-items:center; padding:7px 16px; cursor:pointer; font-size:11px; font-weight:400; }
+      .fons-ctl .fons-it{ display:flex; gap:10px; align-items:center; padding:7px 16px; cursor:pointer; font-size:12px; font-weight:400; }
       .fons-ctl .fons-it:hover{ background:rgba(200,16,46,.07); }
       .fons-ctl .fons-it .pt{ width:8px; height:8px; border-radius:50%; border:1px solid #888; flex:none; }
       .fons-ctl .fons-it.sel .pt{ background:#C8102E; border-color:#C8102E; }
