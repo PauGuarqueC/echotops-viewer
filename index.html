@@ -2180,7 +2180,7 @@ function initMap(){
       return Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8), +k.slice(8, 10), +k.slice(10, 12));
     }
     const modActiu = () => (typeof mod !== 'undefined' && mod && mod.sel && mod.t) ? true : false;
-    const msAra = () => modActiu() ? mod.t : (fixMs !== null ? fixMs : (tsS ? msDe(tsS) : Math.floor(Date.now() / 60000) * 60000));
+    const msAra = () => (window.tlT != null) ? window.tlT : (modActiu() ? mod.t : (fixMs !== null ? fixMs : (tsS ? msDe(tsS) : Math.floor(Date.now() / 60000) * 60000)));
     const clau = () => String(msAra()) + (modActiu() ? 'm' : 'r');
     function posa(h){
       h = Math.max(0, Math.min(maxH, h)); sl.value = h;
@@ -2216,7 +2216,7 @@ function initMap(){
     function pinta(){
       clauAnt = clau();
       if (!cap || !tog.checked) return;
-      ctl.style.display = (!modActiu() && maxH > 0) ? 'block' : 'none';
+      ctl.style.display = (!modActiu() && maxH > 0 && window.tlT == null) ? 'block' : 'none';
       hora.textContent = fixMs !== null ? fData.format(new Date(fixMs)) + ' (+' + sl.value + ' h)' : 'Ara · segueix la barra de temps';
       const n = vigents(msAra());
       cap.eachLayer(l => {
@@ -2289,6 +2289,116 @@ function initMap(){
     q('smp-ara').addEventListener('click', () => posa(0));
     tog.addEventListener('change', () => activa(tog.checked));
     activa(tog.checked);
+  })();
+  // ---- Barra de temps unificada (observacio passada + ara + previsio, estil Windy): -48 h .. +48 h. Nomes en mode "live"; en arxiu es fa servir l'scrubber de sempre ----
+  (function(){
+    const tp = document.getElementById('timeline-panel'), old = document.getElementById('scrubber'), pb = document.getElementById('playbtn');
+    if (!tp || !old || !pb) return;
+    const st = document.createElement('style');
+    st.textContent = '#tl2-wrap{flex:1 1 auto;min-width:0;position:relative;padding-top:2px;}' +
+      '@media (max-width:640px){#tl2-wrap{flex:1 0 100%;}}' +
+      '#tl2{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:pointer;margin:0;display:block;}' +
+      '#tl2::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,#c9d3da 0,#c9d3da 50%,#f6c26b 50%,#f6c26b 100%);}' +
+      '#tl2::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,#c9d3da 0,#c9d3da 50%,#f6c26b 50%,#f6c26b 100%);}' +
+      '#tl2::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;background:#C8102E;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5);}' +
+      '#tl2::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:#C8102E;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.5);}' +
+      '#tl2.fut::-webkit-slider-thumb{background:#e08a00;}#tl2.fut::-moz-range-thumb{background:#e08a00;}' +
+      '.tl2-ara{position:absolute;left:50%;top:3px;width:2px;height:16px;background:#C8102E;opacity:.7;pointer-events:none;transform:translateX(-50%);}' +
+      '.tl2-lbl{position:relative;height:12px;font-size:10px;color:var(--text-dim,#7b8794);}' +
+      '.tl2-lbl span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap;}' +
+      '.tl2-lbl span:first-child{transform:none;}.tl2-lbl span:last-child{transform:translateX(-100%);}';
+    document.head.appendChild(st);
+    const wrap = document.createElement('div'); wrap.id = 'tl2-wrap'; wrap.style.display = 'none';
+    wrap.innerHTML = '<div class="tl2-ara"></div><input type="range" id="tl2" min="-480" max="480" step="1" value="0">' +
+      '<div class="tl2-lbl"><span style="left:0%">−48 h</span><span style="left:25%">−24 h</span><span style="left:50%">Ara</span><span style="left:75%">+24 h</span><span style="left:100%">+48 h</span></div>';
+    old.parentNode.insertBefore(wrap, old.nextSibling);
+    const sl = document.getElementById('tl2');
+    const Q = 360000, N = 480;                              // passos de 6 min; -480..+480 = -48 h..+48 h
+    let Tsel = null, nowRef = Math.floor(Date.now() / Q) * Q, liveAnt = null, obsOcult = false, ocults = [], pend = null, dragging = false, ownPlay = false, ownTimer = null, warned = false;
+    const dFmt = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const modSel = () => (typeof mod !== 'undefined' && mod && mod.sel) ? mod : null;
+    function escriuHora(T){
+      const pc = {}; dFmt.formatToParts(new Date(T)).forEach(x => { pc[x.type] = x.value; });
+      const a = document.getElementById('ts-date'), b = document.getElementById('ts-time'), c = document.getElementById('ts-utc');
+      if (a) a.textContent = pc.day + '/' + pc.month + '/' + pc.year;
+      if (b) b.textContent = pc.hour + ':' + pc.minute;
+      if (c) c.textContent = new Date(T).toISOString().slice(11, 16) + ' UTC · previsió';
+    }
+    function ocultaObs(on){                                  // al futur no hi ha observacio: s'amaguen les capes d'observacio
+      if (on){
+        const els = [];
+        try{ if (currentOverlay && currentOverlay.getElement) els.push(currentOverlay.getElement()); }catch(_){}
+        try{ if (refl && refl.overlay && refl.overlay.getElement) els.push(refl.overlay.getElement()); }catch(_){}
+        try{ if (sat && sat.capa && sat.capa.getContainer) els.push(sat.capa.getContainer()); }catch(_){}
+        const ap = map.getPane('acaPane'); if (ap) els.push(ap);
+        els.forEach(e => { if (e){ e.style.visibility = 'hidden'; if (ocults.indexOf(e) < 0) ocults.push(e); } });
+        try{ nowc.marcs.clearLayers(); nowc.movCapa.clearLayers(); }catch(_){}
+      } else if (ocults.length){
+        ocults.forEach(e => { e.style.visibility = ''; }); ocults = [];
+      }
+      obsOcult = on;
+    }
+    function aplica(){
+      if (Tsel === null) return;
+      const T = Tsel, m = modSel();
+      if (T > Date.now()){
+        ocultaObs(true);
+        if (m){ const h = Math.round(T / 3600000) * 3600000; if (m.t !== h){ m.t = h; modMostra(); } }
+        escriuHora(T);
+      } else {
+        if (obsOcult) ocultaObs(false);
+        let best = -1, bd = Infinity;
+        for (let i = 0; i < visibleTimestamps.length; i++){ const d = Math.abs(tsToDate(visibleTimestamps[i]).getTime() - T); if (d < bd){ bd = d; best = i; } }
+        if (best >= 0 && visibleTimestamps[best] !== currentTs) showFrame(best);
+      }
+    }
+    function stopPlay(){ if (!ownPlay) return; ownPlay = false; clearInterval(ownTimer); pb.textContent = '▶ REPRODUIR'; }
+    function startPlay(){
+      ownPlay = true; pb.textContent = '⏸ PAUSA';
+      ownTimer = setInterval(() => {
+        let T = Tsel !== null ? Tsel : (currentTs ? tsToDate(currentTs).getTime() : Date.now());
+        T += (T < Date.now() ? 30 : 60) * 60000;
+        if (T > nowRef + N * Q) T = nowRef - N * Q;
+        Tsel = T; window.tlT = T; aplica();
+      }, 700);
+    }
+    sl.addEventListener('input', () => {
+      stopPlay();
+      Tsel = nowRef + (+sl.value) * Q; window.tlT = Tsel;
+      if (!pend) pend = requestAnimationFrame(() => { pend = null; aplica(); });
+    });
+    sl.addEventListener('pointerdown', () => { dragging = true; });
+    window.addEventListener('pointerup', () => { dragging = false; });
+    pb.addEventListener('click', e => {
+      if (typeof mode === 'undefined' || mode !== 'live') return;     // arxiu: comportament de sempre
+      e.stopImmediatePropagation(); e.preventDefault();
+      if (ownPlay) stopPlay(); else startPlay();
+    }, true);
+    setInterval(() => {
+      try{
+        const live = (mode === 'live');
+        nowRef = Math.floor(Date.now() / Q) * Q;
+        if (live !== liveAnt){
+          liveAnt = live;
+          wrap.style.display = live ? '' : 'none';
+          old.style.display = live ? 'none' : '';
+          ['mod-prev', 'mod-t', 'mod-next', 'mod-ara'].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = live ? 'none' : ''; });
+          if (!live){ stopPlay(); Tsel = null; window.tlT = null; if (obsOcult) ocultaObs(false); }
+        }
+        if (!live) return;
+        const fut = Tsel !== null && Tsel > Date.now();
+        if (fut){                                                      // re-afirma l'estat de futur si una actualitzacio del manifest el trenca
+          ocultaObs(true); escriuHora(Tsel);
+          const m = modSel(); if (m){ const h = Math.round(Tsel / 3600000) * 3600000; if (m.t !== h){ m.t = h; modMostra(); } }
+        }
+        if (!dragging){
+          const Tc = Tsel !== null ? Tsel : (currentTs ? tsToDate(currentTs).getTime() : Date.now());
+          const v = Math.max(-N, Math.min(N, Math.round((Tc - nowRef) / Q)));
+          if (+sl.value !== v) sl.value = v;
+        }
+        sl.classList.toggle('fut', fut);
+      }catch(e){ if (!warned){ warned = true; console.warn('Barra de temps unificada:', e); } }
+    }, 300);
   })();
   // ---- fi Tempestes enganxades ----
 
