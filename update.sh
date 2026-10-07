@@ -19,6 +19,7 @@ python3 scripts/nowcast_export.py --arrel "$HOME/echotops-data/aemet" --sortida 
 # --- Previsió: WRF-SMC i AROME (pluja de Météo-France) ---
 python3 scripts/arome_precip.py || echo "arome: error a la descàrrega" >&2
 python3 scripts/models_export.py --wrf-dir /home/labfire/data/SMC-WRF --arome-dir "$HOME/arome_precip" --sortida data/models || echo "models: error a l'exportació" >&2
+python3 scripts/aca_collector.py --sortida data/aca || echo "aca: error" >&2
 
 git add data/
 if git diff --cached --quiet; then
