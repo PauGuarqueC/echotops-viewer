@@ -407,7 +407,7 @@
       .fons-ctl .fons-tab[disabled]{ opacity:.45; cursor:default; color:inherit; }
       .fons-ctl .fons-llista{ display:none; border-top:1px solid var(--panel-border,#ccc); padding:6px 0; min-width:270px; }
       .fons-ctl .fons-llista.obert{ display:block; }
-      .fons-ctl .fons-it{ display:flex; gap:10px; align-items:center; padding:7px 16px; cursor:pointer; font-size:10px; font-weight:400; }
+      .fons-ctl .fons-it{ display:flex; gap:10px; align-items:center; padding:7px 16px; cursor:pointer; font-size:11px; font-weight:400; }
       .fons-ctl .fons-it:hover{ background:rgba(200,16,46,.07); }
       .fons-ctl .fons-it .pt{ width:8px; height:8px; border-radius:50%; border:1px solid #888; flex:none; }
       .fons-ctl .fons-it.sel .pt{ background:#C8102E; border-color:#C8102E; }
