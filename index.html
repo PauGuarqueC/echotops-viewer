@@ -1444,6 +1444,26 @@ function initMap(){
         if (!c[p]) altres++;
       }
       if (altres > N * 0.4) return null;                                      // colors inesperats (p. ex. relleu): no es toca la base
+      const q = new Int32Array(N), vist = new Uint8Array(N);
+      const elimina = (cl, thr) => {                                          // esborra (→ 0) els components connexos de la classe cl amb menys de thr píxels
+        vist.fill(0);
+        for (let p0 = 0; p0 < N; p0++){
+          if (c[p0] !== cl || vist[p0]) continue;
+          let h = 0, t = 0; q[t++] = p0; vist[p0] = 1;
+          while (h < t){
+            const p = q[h++], x = p % W;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+              if (!dx && !dy) continue;
+              const xx = x + dx; if (xx < 0 || xx >= W) continue;
+              const pp = p + dy * W + dx; if (pp < 0 || pp >= N || c[pp] !== cl || vist[pp]) continue;
+              vist[pp] = 1; q[t++] = pp;
+            }
+          }
+          if (t < thr){ for (let i = 0; i < t; i++) c[q[i]] = 0; altres += t; }
+        }
+      };
+      elimina(3, Math.round(300 * W / 1500));                                 // línies: només les llargues i contínues (comarques, províncies, països); fora halos i municipis puntejats
+      elimina(1, Math.round(1500 * W / 1500));                                // mar: fora els petits anells que deixa el text suavitzat
       const lin = c.slice();                                                  // línies originals (3) abans d'omplir
       {                                                                       // terra fi (≤2 px) = vora suavitzada d'un text sobre el mar: es descarta
         const n = c.slice();
@@ -1454,7 +1474,7 @@ function initMap(){
         }
         c = n;
       }
-      for (let pas = 0; pas < 5 && altres > 0; pas++){                        // omple text i vores amb mar/terra veïns
+      for (let pas = 0; pas < 14 && altres > 0; pas++){                        // omple text i vores amb mar/terra veïns
         const n = c.slice();
         for (let y = 0, p = 0; y < H; y++) for (let x = 0; x < W; x++, p++){
           if (c[p]) continue;
