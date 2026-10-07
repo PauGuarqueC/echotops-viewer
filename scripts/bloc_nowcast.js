@@ -930,19 +930,19 @@
       let c = new Uint8Array(N), altres = 0;                                  // 1 mar, 2 terra, 3 línia, 0 altres
       for (let i = 0, p = 0; p < N; i += 4, p++){
         const rr = d[i], mx = Math.max(rr, d[i + 1], d[i + 2]), mn = Math.min(rr, d[i + 1], d[i + 2]);
-        if (mx - mn <= 6){ if (Math.abs(rr - 215) <= 3) c[p] = 1; else if (Math.abs(rr - 183) <= 3) c[p] = 2; else if (rr >= 228) c[p] = 3; }
+        if (mx - mn <= 6){ if (Math.abs(rr - 215) <= 3) c[p] = 1; else if (Math.abs(rr - 183) <= 3) c[p] = 2; else if (rr >= 222) c[p] = 3; }
         if (!c[p]) altres++;
       }
       if (altres > N * 0.4) return null;                                      // colors inesperats (p. ex. relleu): no es toca la base
       const q = new Int32Array(N), vist = new Uint8Array(N);
-      const elimina = (cl, thr) => {                                          // esborra (→ 0) els components connexos de la classe cl amb menys de thr píxels
+      const elimina = (cl, thr, rad) => {                                     // esborra (→ 0) els components connexos de la classe cl amb menys de thr píxels (rad = 2 pont buits d'1 px)
         vist.fill(0);
         for (let p0 = 0; p0 < N; p0++){
           if (c[p0] !== cl || vist[p0]) continue;
           let h = 0, t = 0; q[t++] = p0; vist[p0] = 1;
           while (h < t){
             const p = q[h++], x = p % W;
-            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+            for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++){
               if (!dx && !dy) continue;
               const xx = x + dx; if (xx < 0 || xx >= W) continue;
               const pp = p + dy * W + dx; if (pp < 0 || pp >= N || c[pp] !== cl || vist[pp]) continue;
@@ -952,8 +952,8 @@
           if (t < thr){ for (let i = 0; i < t; i++) c[q[i]] = 0; altres += t; }
         }
       };
-      elimina(3, Math.round(300 * W / 1500));                                 // línies: només les llargues i contínues (comarques, províncies, països); fora halos i municipis puntejats
-      elimina(1, Math.round(1500 * W / 1500));                                // mar: fora els petits anells que deixa el text suavitzat
+      elimina(3, Math.round(300 * W / 1500), 2);                                 // línies: només les llargues i contínues (comarques, províncies, països); fora halos i municipis puntejats
+      elimina(1, Math.round(1500 * W / 1500), 1);                                // mar: fora els petits anells que deixa el text suavitzat
       const lin = c.slice();                                                  // línies originals (3) abans d'omplir
       {                                                                       // terra fi (≤2 px) = vora suavitzada d'un text sobre el mar: es descarta
         const n = c.slice();
@@ -1255,7 +1255,7 @@
       let fallBase = 0, totBase = 0;
       // Sense noms: CARTO en versió "nolabels"; la base ICGC es neteja (mar i terra plans, es conserven les línies i es dibuixa la costa)
       const icgcL = (typeof baseLayers !== 'undefined') ? baseLayers.icgc : null;
-      const net = (icgcL && base.includes(icgcL)) ? await icgcNet(nw, se, org, Zf, MW, MH) : null;
+      const net = (cat && icgcL && base.includes(icgcL)) ? await icgcNet(nw, se, org, Zf, MW, MH) : null;
       for (const l of base){
         if (l === icgcL && net){ ctx.drawImage(net.base, 0, 0); continue; }
         const zt = Math.min(l.options.maxZoom || 12, Math.round(Zf)), sc = Math.pow(2, Zf - zt);
@@ -1278,7 +1278,7 @@
         const b = ov.getBounds(), a = P(b.getNorthWest()), c = P(b.getSouthEast());
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
       }
-      if (!opt.senseLimits){
+      if (cat && !opt.senseLimits){
         if (net) limDibuixaNet(ctx, net.linies, MW);
         else{
           const wi = await limWms(nw, se, MW, MH);
