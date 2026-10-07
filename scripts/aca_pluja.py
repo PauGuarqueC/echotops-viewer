@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Pluja acumulada (30 min i 3 h) dels pluviòmetres de l'ACA i nivell d'avís, a partir de l'arxiu propi del col·lector.
-Entrada:  ~/aca_arxiu/AAAA-MM.csv  +  <sortida>/estacions.json     Sortida: <sortida>/pluja.json i pluja_hist.json
+Entrada:  ~/aca_arxiu/AAAA-MM.csv  +  <sortida>/estacions.json     Sortida: <sortida>/pluja.json
 Els pluviòmetres de l'ACA donen la intensitat (mm/h) cada 5 min; cada mesura es pren com la mitjana dels 5 min anteriors,
 de manera que l'acumulat = suma(intensitat) / 12.
-Nivells: 1 groc = llindar baix en 30 min o en 3 h · 2 taronja = llindar alt en un dels dos · 3 vermell = llindar alt en els dos.
+Nivells: 1 groc = prealerta (intensitat > 15 mm/h) · 2 taronja = > 20 mm/30 min o > 60 mm/3 h · 3 vermell = > 40 mm/30 min o > 90 mm/3 h.
 Ús: venv/bin/python scripts/aca_pluja.py --sortida data/aca"""
 import argparse, csv, json, sys
 from datetime import datetime, timedelta, timezone
@@ -11,19 +11,19 @@ from pathlib import Path
 
 LL30 = (20.0, 40.0)        # mm / 30 min (baix, alt)
 LL3H = (60.0, 90.0)        # mm / 3 h   (baix, alt)
+LL_INT = 15.0            # mm/h (prealerta)
 PAS = 5                    # min entre mesures
 HIST_H = 48                # hores d'històric que es publiquen (més 3 h per poder calcular l'acumulat des del principi)
 MAX_EDAT = 30              # min: si l'última mesura és més antiga, l'estació es considera sense dada
 
 
-def nivell(a30, a3h):
-    h30, h3 = a30 > LL30[1], a3h > LL3H[1]
-    if h30 and h3:
-        return 3
-    if h30 or h3:
-        return 2
+def nivell(a30, a3h, inten):
+    if a30 > LL30[1] or a3h > LL3H[1]:
+        return 3                                       # vermell: llindar alt en 30 min o en 3 h
     if a30 > LL30[0] or a3h > LL3H[0]:
-        return 1
+        return 2                                       # taronja: llindar baix
+    if inten > LL_INT:
+        return 1                                       # groc: prealerta per intensitat
     return 0
 
 
@@ -80,8 +80,8 @@ def main():
         a30, n30 = acum(30); a3h, n3h = acum(180)
         viu = edat <= MAX_EDAT
         out.append({"id": e["id"], "nom": e["nom"], "comarca": e.get("comarca"), "lat": e["lat"], "lon": e["lon"],
-                    "t": tl.strftime("%Y-%m-%dT%H:%MZ"), "i": d[tl], "a30": a30, "a3h": a3h, "n": n3h, "nivell": nivell(a30, a3h) if viu else 0})
-    res = {"actualitzat": ara.strftime("%Y-%m-%dT%H:%M:%SZ"), "llindars": {"30min": LL30, "3h": LL3H}, "estacions": out}
+                    "t": tl.strftime("%Y-%m-%dT%H:%MZ"), "i": d[tl], "a30": a30, "a3h": a3h, "n": n3h, "nivell": nivell(a30, a3h, d[tl]) if viu else 0})
+    res = {"actualitzat": ara.strftime("%Y-%m-%dT%H:%M:%SZ"), "llindars": {"intensitat": LL_INT, "30min": LL30, "3h": LL3H}, "estacions": out}
     # Històric: intensitat (mm/h) cada 5 min de les últimes HIST_H+3 h, per estació (el visor en calcula els acumulats)
     fi = ara.replace(second=0, microsecond=0); fi -= timedelta(minutes=fi.minute % PAS)
     npas = (HIST_H + 3) * 60 // PAS + 1
@@ -94,7 +94,7 @@ def main():
             if 0 <= k < npas:
                 arr[k] = round(v, 1) if v else 0
         hist.append({"id": e["id"], "nom": e["nom"], "comarca": e.get("comarca"), "lat": e["lat"], "lon": e["lon"], "i": arr})
-    (sortida / "pluja_hist.json").write_text(json.dumps({"t0": t0.strftime("%Y-%m-%dT%H:%MZ"), "pas": PAS, "llindars": {"30min": LL30, "3h": LL3H},
+    (sortida / "pluja_hist.json").write_text(json.dumps({"t0": t0.strftime("%Y-%m-%dT%H:%MZ"), "pas": PAS, "llindars": {"intensitat": LL_INT, "30min": LL30, "3h": LL3H},
                                                          "estacions": hist}, ensure_ascii=False, separators=(",", ":")))
     (sortida / "pluja.json").write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")))
     nv = [x["nivell"] for x in out]

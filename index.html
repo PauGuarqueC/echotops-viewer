@@ -2019,18 +2019,23 @@ function initMap(){
   // ---- Pluviòmetres ACA (data/aca/pluja_hist.json, generat per aca_pluja.py): segueixen la barra de temps ----
   (function(){
     const COL = ['#888888', '#F2C200', '#F28C00', '#C8102E'];
-    const NOM = ['', 'Avís groc', 'Avís taronja', 'Avís vermell'];
+    const NOM = ['', 'Prealerta', 'Avís taronja', 'Avís vermell'];
     const pane = map.createPane('acaPane'); pane.style.zIndex = 460;
     const grup = L.layerGroup();
+    const stp = document.createElement('style');
+    stp.textContent = '.aca-pill{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;padding:2px 9px;border-radius:12px;border:2px solid #fff;' +
+      'font:700 12px/1.25 var(--font-ui,sans-serif);box-shadow:0 1px 5px rgba(0,0,0,.55);cursor:pointer;letter-spacing:.01em;}' +
+      '.aca-pill small{font-weight:400;font-size:10px;opacity:.92;margin-left:2px;}';
+    document.head.appendChild(stp);
     const tog = document.getElementById('aca-toggle'), info = document.getElementById('aca-info');
     const hl = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const f1 = x => (x === null || x === undefined) ? '—' : (Math.round(x * 10) / 10).toString().replace('.', ',');
     let H = null, ms0 = 0, ts = null, marcs = [], timer = null;
 
-    function nivell(a30, a3h){
-      const l30 = H.llindars['30min'], l3 = H.llindars['3h'];
-      const h30 = a30 > l30[1], h3 = a3h > l3[1];
-      return (h30 && h3) ? 3 : (h30 || h3) ? 2 : (a30 > l30[0] || a3h > l3[0]) ? 1 : 0;
+    // 1 groc = prealerta (intensitat > llindar) · 2 taronja = llindar baix en 30 min o 3 h · 3 vermell = llindar alt en 30 min o 3 h
+    function nivell(a30, a3h, inten){
+      const l30 = H.llindars['30min'], l3 = H.llindars['3h'], li = H.llindars.intensitat || 15;
+      return (a30 > l30[1] || a3h > l3[1]) ? 3 : (a30 > l30[0] || a3h > l3[0]) ? 2 : (inten > li) ? 1 : 0;
     }
     function estat(e, k){                                  // estat de l'estació a l'índex de temps k
       const a = e.i; let a30 = 0, a3 = 0, j0 = -1;
@@ -2042,7 +2047,7 @@ function initMap(){
       }
       if (j0 < 0) return { n: 0, i: null, a30: null, a3h: null, t: null };
       a30 /= 12; a3 /= 12;
-      return { n: nivell(a30, a3), i: a[k - j0], a30, a3h: a3, t: ms0 + (k - j0) * H.pas * 60000 };
+      return { n: nivell(a30, a3, a[k - j0]), i: a[k - j0], a30, a3h: a3, t: ms0 + (k - j0) * H.pas * 60000 };
     }
     function html(e){
       const c = e.cur, n = c.n;
@@ -2058,15 +2063,28 @@ function initMap(){
       const nmax = H.estacions[0].i.length - 1;
       if (k > nmax) k = nmax;
       let nav = 0;
-      marcs.forEach(({ e, m }) => {
+      marcs.forEach(o => {
+        const { e, m, p } = o;
         e.cur = k < 0 ? { n: 0, i: null, a30: null, a3h: null, t: null } : estat(e, k);
         const n = e.cur.n;
-        m.setStyle({ radius: n ? 8 : 4.5, color: n ? '#fff' : '#777', weight: n ? 1.5 : 0.8, opacity: n ? 1 : 0.35, fillColor: COL[n], fillOpacity: n ? 0.92 : 0.28 });
-        m.setRadius(n ? 8 : 4.5);
-        if (n) { nav++; m.bringToFront(); }
+        if (n) {                                            // en avís: etiqueta ovalada amb el valor que ha superat el llindar
+          const l30 = H.llindars['30min'][0], l3 = H.llindars['3h'][0];
+          const en30 = e.cur.a30 / l30 >= e.cur.a3h / l3;
+          const txt = n === 1 ? `${Math.round(e.cur.i)}<small>mm/h</small>` : `${Math.round(en30 ? e.cur.a30 : e.cur.a3h)}<small>mm/${en30 ? '30′' : '3h'}</small>`;
+          p.setIcon(L.divIcon({ className: '', iconSize: [0, 0],
+            html: `<div class="aca-pill" style="background:${COL[n]};color:${n === 1 ? '#222' : '#fff'}">${txt}</div>` }));
+          p.setZIndexOffset(1000 * n);
+          if (grup.hasLayer(m)) grup.removeLayer(m);
+          if (!grup.hasLayer(p)) grup.addLayer(p);
+          nav++;
+        } else {
+          if (grup.hasLayer(p)) grup.removeLayer(p);
+          if (!grup.hasLayer(m)) grup.addLayer(m);
+        }
+        if (p.isPopupOpen()) p.setPopupContent(html(e));
         if (m.isPopupOpen()) m.setPopupContent(html(e));
       });
-      if (info) info.textContent = nav ? `${nav} pluviòmetre${nav > 1 ? 's' : ''} en avís (30 min > ${H.llindars['30min'][0]} mm · 3 h > ${H.llindars['3h'][0]} mm)` :
+      if (info) info.textContent = nav ? `${nav} pluviòmetre${nav > 1 ? 's' : ''} en avís (prealerta > ${H.llindars.intensitat || 15} mm/h · 30 min > ${H.llindars['30min'][0]} mm · 3 h > ${H.llindars['3h'][0]} mm)` :
                                          `${marcs.length} pluviòmetres · cap supera els llindars`;
     }
     function dades(d){
@@ -2074,8 +2092,11 @@ function initMap(){
       if (!marcs.length) {
         d.estacions.forEach(e => {
           e.cur = { n: 0 };
-          const m = L.circleMarker([e.lat, e.lon], { pane: 'acaPane', radius: 4.5, fillColor: COL[0], fillOpacity: 0.28 });
-          m.bindPopup(() => html(e)); m.addTo(grup); marcs.push({ e, m });
+          const m = L.circleMarker([e.lat, e.lon], { pane: 'acaPane', radius: 4.5, color: '#777', weight: 0.8, opacity: 0.35, fillColor: COL[0], fillOpacity: 0.28 });
+          m.bindPopup(() => html(e)); m.addTo(grup);
+          const p = L.marker([e.lat, e.lon], { pane: 'acaPane', icon: L.divIcon({ className: '', iconSize: [0, 0], html: '' }) });
+          p.bindPopup(() => html(e));
+          marcs.push({ e, m, p });
         });
       } else {                                              // actualització: es conserven els marcadors i se'ls canvia la sèrie
         const per = {}; d.estacions.forEach(e => per[e.id] = e);
