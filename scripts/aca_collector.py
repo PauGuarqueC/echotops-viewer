@@ -146,11 +146,21 @@ def main():
         obs, n = {}, 0
         for e in cat["estacions"]:
             for v in e["vars"]:
-                j = get(f"/data/{v['provider']}/{v['sensor']}", {"limit": 5000, "from": ini.strftime(fmt), "to": ara.strftime(fmt)})
-                for o in (j or {}).get("observations", []):
-                    obs.setdefault(v["sensor"], []).append((int(o["time"]), o.get("value")))
-                n += 1
-                time.sleep(0.05)
+                fins, ant = ara, None                              # l'API retorna com a màxim 200 mesures per petició: es pagina enrere amb "to"
+                for _ in range(300):
+                    j = get(f"/data/{v['provider']}/{v['sensor']}", {"limit": 200, "from": ini.strftime(fmt), "to": fins.strftime(fmt)})
+                    ob = (j or {}).get("observations", [])
+                    n += 1
+                    time.sleep(0.05)
+                    if not ob:
+                        break
+                    for o in ob:
+                        obs.setdefault(v["sensor"], []).append((int(o["time"]), o.get("value")))
+                    mes_antic = min(int(o["time"]) for o in ob)
+                    if len(ob) < 200 or mes_antic <= ini.timestamp() * 1000 or (ant is not None and mes_antic >= ant):
+                        break
+                    ant = mes_antic
+                    fins = datetime.fromtimestamp(mes_antic / 1000 - 1, timezone.utc)
         print(f"ACA backfill: {n} sensors consultats, {sum(len(x) for x in obs.values())} mesures; noves a l'arxiu: {arxiva(obs, arx, omple=True)}")
         return 0
 
