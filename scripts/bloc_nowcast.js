@@ -1638,7 +1638,8 @@
     window.acaMostra = t => { ts = t; if (tog && tog.checked) pinta(); };
     if (tog) { tog.addEventListener('change', () => activa(tog.checked)); activa(tog.checked); }
   })();
-  // ---- Avisos SMP del Meteocat per comarques (data/smp/avisos.json, generat per smp_collector.py): segueixen la barra de temps o una previsio triada ----
+  // ---- Avisos SMP del Meteocat per comarques (data/smp/avisos.json, generat per smp_collector.py) ----
+  // Segueixen el control de previsio dels models (mod.sel / mod.t) si es actiu. Si no, slider propi (smp-ctl) o la barra de temps del radar.
   (function(){
     const COL = ['#888888', '#F28C00', '#C8102E'];             // per nivell: 1 = llindar baix (taronja), 2 = llindar alt (vermell)
     const ref = document.getElementById('aca-info');
@@ -1647,20 +1648,35 @@
     const wrap = document.createElement('div');
     wrap.style.marginTop = '8px';
     wrap.innerHTML = '<label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="smp-toggle" checked style="margin-top:2px"> <span>Avisos Meteocat (comarques)</span></label>' +
-                     '<select id="smp-per" style="margin-top:4px;width:100%;font-size:11px;"></select>' +
-                     '<div id="smp-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>';
+      '<div id="smp-ctl" style="display:none;margin-top:4px;">' +
+        '<div style="display:flex;align-items:center;gap:4px;">' +
+          '<button type="button" id="smp-prev" title="Hora anterior" style="padding:2px 8px;">◀</button>' +
+          '<input type="range" id="smp-t" min="0" max="0" step="1" value="0" style="flex:1;margin:0;min-width:0;" title="Hora de previsió dels avisos">' +
+          '<button type="button" id="smp-next" title="Hora següent" style="padding:2px 8px;">▶</button>' +
+          '<button type="button" id="smp-ara" style="padding:2px 8px;">Ara</button></div>' +
+        '<div id="smp-hora" style="font-size:11px;margin-top:2px;opacity:.9;"></div></div>' +
+      '<div id="smp-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>';
     ref.parentNode.insertBefore(wrap, ref.nextSibling);
-    const tog = document.getElementById('smp-toggle'), sel = document.getElementById('smp-per'), info = document.getElementById('smp-info');
+    const q = id => document.getElementById(id);
+    const tog = q('smp-toggle'), info = q('smp-info'), ctl = q('smp-ctl'), sl = q('smp-t'), hora = q('smp-hora');
     const fData = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const fHora = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const etiq = p => fData.format(new Date(p.ini)) + '–' + fHora.format(new Date(p.fi));
-    let cap = null, D = null, tsS = null, fix = null, timer = null;
+    let cap = null, D = null, tsS = null, timer = null, poll = null, clauAnt = '', maxH = 0, fixMs = null;
     const idDe = f => parseInt(f.properties.comarca, 10);
+    const hBase = () => Math.round(Date.now() / 3600000) * 3600000;
     function msDe(t){
-      const q = t.replace('_', '');
-      return Date.UTC(+q.slice(0, 4), +q.slice(4, 6) - 1, +q.slice(6, 8), +q.slice(8, 10), +q.slice(10, 12));
+      const k = t.replace('_', '');
+      return Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8), +k.slice(8, 10), +k.slice(10, 12));
     }
-    const msAra = () => fix !== null ? fix : (tsS ? msDe(tsS) : Date.now());
+    const modActiu = () => (typeof mod !== 'undefined' && mod && mod.sel && mod.t) ? true : false;
+    const msAra = () => modActiu() ? mod.t : (fixMs !== null ? fixMs : (tsS ? msDe(tsS) : Math.floor(Date.now() / 60000) * 60000));
+    const clau = () => String(msAra()) + (modActiu() ? 'm' : 'r');
+    function posa(h){
+      h = Math.max(0, Math.min(maxH, h)); sl.value = h;
+      fixMs = h > 0 ? hBase() + h * 3600000 : null;
+      pinta();
+    }
     function vigents(ms){                                   // idComarca -> avis de mes perill vigent a l'instant ms
       const r = {};
       if (!D) return r;
@@ -1680,58 +1696,62 @@
       if (!llista.length) return h + '<br><span style="opacity:.7">Cap avís del Meteocat per a aquesta comarca.</span></div>';
       h += llista.map(p => {
         const x = p.comarques[id], i = Date.parse(p.ini), fi = Date.parse(p.fi);
-        const act = ms >= i && ms < fi, pas = fi <= ara;
-        const estat = pas ? ' (passat)' : (i > ara ? ' (previsió)' : ' (vigent)');
-        return '<div style="margin-top:6px;padding:3px 6px;border-left:4px solid ' + COL[Math.min(x.nivell, 2)] + ';' + (act ? 'background:rgba(128,128,128,.22);' : '') + (pas ? 'opacity:.55;' : '') + '">' +
+        const act = ms >= i && ms < fi;
+        const estat = i > ara ? ' (previsió)' : ' (vigent)';
+        return '<div style="margin-top:6px;padding:3px 6px;border-left:4px solid ' + COL[Math.min(x.nivell, 2)] + ';' + (act ? 'background:rgba(128,128,128,.22);' : '') + '">' +
           '<b>' + etiq(p) + '</b>' + estat + (act ? ' ◄ mostrat' : '') + '<br>' + p.meteor + '<br>' + x.llindar + ' · perill ' + x.perill + '</div>';
       }).join('');
       return h + '<div style="margin-top:6px;opacity:.6;font-size:10px">Hores locals · Meteocat</div></div>';
     }
     function pinta(){
+      clauAnt = clau();
       if (!cap || !tog.checked) return;
+      ctl.style.display = (!modActiu() && maxH > 0) ? 'block' : 'none';
+      hora.textContent = fixMs !== null ? fData.format(new Date(fixMs)) + ' (+' + sl.value + ' h)' : 'Ara · segueix la barra de temps';
       const n = vigents(msAra());
       cap.eachLayer(l => {
         const x = n[idDe(l.feature)];
+        const sk = x ? Math.min(x.nivell, 2) + '|' + x.perill : '';
+        if (l._smpSk === sk) return;
+        l._smpSk = sk;
         if (!x) { l.setStyle({ stroke: false, fillOpacity: 0 }); return; }
         const c = COL[Math.min(x.nivell, 2)];
         l.setStyle({ stroke: true, color: c, weight: 2, opacity: 0.9, fillColor: c, fillOpacity: 0.12 + 0.05 * x.perill });
       });
       const k = Object.keys(n).length;
       info.textContent = !D ? 'Sense dades dels avisos' :
-        (fix !== null ? 'Previsió triada · ' : '') + (k ? k + ' comarca' + (k > 1 ? 'es' : '') + ' en avís · clica-hi per al detall' : 'Cap comarca en avís en aquest instant');
-    }
-    function opcions(){
-      const ara = Date.now(), mem = sel.value;
-      const ini = [...new Set((D ? D.periodes : []).filter(p => Date.parse(p.fi) > ara).map(p => p.ini))].sort();
-      sel.innerHTML = '<option value="">Segueix la barra de temps</option>' + ini.map(i => {
-        const p = D.periodes.find(q => q.ini === i);
-        const n = new Set(D.periodes.filter(q => q.ini === i).flatMap(q => Object.keys(q.comarques))).size;
-        return '<option value="' + i + '">' + (Date.parse(i) <= ara ? 'Ara' : 'Previsió') + ' ' + etiq(p) + ' · ' + n + ' com.</option>';
-      }).join('');
-      sel.value = ini.includes(mem) ? mem : '';
-      fix = sel.value ? Date.parse(sel.value) : null;
+        (modActiu() ? 'Segueix la previsió dels models · ' : '') + (k ? k + ' comarca' + (k > 1 ? 'es' : '') + ' en avís · clica-hi per al detall' : 'Cap comarca en avís en aquest instant');
     }
     function carrega(){
       const g = cap ? Promise.resolve(null) :
         fetch('data/comarques_det.geojson').then(r => r.ok ? r.json() : Promise.reject()).catch(() => fetch('data/comarques.geojson').then(r => r.json()));
       const a = fetch('data/smp/avisos.json?_=' + Date.now()).then(r => r.ok ? r.json() : null).catch(() => null);
       Promise.all([g, a]).then(([gj, d]) => {
-        D = d; opcions();
+        D = d;
+        const fins = D && D.periodes.length ? Math.max.apply(null, D.periodes.map(p => Date.parse(p.fi))) : 0;
+        maxH = fins ? Math.min(96, Math.max(0, Math.ceil((fins - hBase()) / 3600000) - 1)) : 0;
+        sl.max = maxH;
+        if (+sl.value > maxH) { sl.value = maxH; fixMs = maxH > 0 ? hBase() + maxH * 3600000 : null; }
         if (gj && !cap) cap = L.geoJSON(gj, { pane: 'smpPane', smoothFactor: 0.3, style: () => ({ stroke: false, fillOpacity: 0 }),
                                               onEachFeature: (f, l) => l.bindPopup(() => popup(f)) });
         if (tog.checked && cap && !map.hasLayer(cap)) cap.addTo(map);
+        if (cap) cap.eachLayer(l => { l._smpSk = null; });
         pinta();
       }).catch(() => { info.textContent = 'Sense dades dels avisos'; });
     }
     function activa(on){
-      clearInterval(timer);
-      if (on) { carrega(); timer = setInterval(carrega, 10 * 60 * 1000); }
-      else { if (cap) map.removeLayer(cap); info.textContent = ''; }
-      sel.style.display = on ? '' : 'none';
+      clearInterval(timer); clearInterval(poll);
+      if (on) {
+        carrega(); timer = setInterval(carrega, 10 * 60 * 1000);
+        poll = setInterval(() => { if (clau() !== clauAnt) pinta(); }, 250);
+      } else { if (cap) map.removeLayer(cap); info.textContent = ''; ctl.style.display = 'none'; }
     }
     const prev = window.acaMostra;
     window.acaMostra = t => { if (prev) prev(t); tsS = t; pinta(); };
-    sel.addEventListener('change', () => { fix = sel.value ? Date.parse(sel.value) : null; pinta(); });
+    sl.addEventListener('input', () => posa(+sl.value));
+    q('smp-prev').addEventListener('click', () => posa(+sl.value - 1));
+    q('smp-next').addEventListener('click', () => posa(+sl.value + 1));
+    q('smp-ara').addEventListener('click', () => posa(0));
     tog.addEventListener('change', () => activa(tog.checked));
     activa(tog.checked);
   })();
