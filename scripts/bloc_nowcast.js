@@ -355,6 +355,10 @@
           <input type="checkbox" id="mov-toggle" style="margin-top:2px"> <span>Moviment (rastre i velocitat)</span>
         </label>
         <div id="mov-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
+        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
+          <input type="checkbox" id="aca-toggle" checked style="margin-top:2px"> <span>Pluviòmetres ACA</span>
+        </label>
+        <div id="aca-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;">
           <input type="checkbox" id="nowc-so"> <span>So d'avís</span>
           <a href="#" id="nowc-prova" style="margin-left:auto;font-size:11px;">prova</a>
@@ -1501,4 +1505,42 @@
     lbl.forEach((t, i) => { if (t) ctx.fillText(t, x + (mode === 'centre' ? (i + 0.5) : (i + 1)) * bw, alt ? (i % 2 === 0 ? by - 4.8 * u : by + bh + 5.5 * u) : by + 17 * u); });
     ctx.textAlign = 'left';
   }
+  // ---- Pluviòmetres ACA (data/aca/pluja.json, generat per aca_pluja.py) ----
+  (function(){
+    const COL = ['#888888', '#F2C200', '#F28C00', '#C8102E'];
+    const NOM = ['', 'Avís groc', 'Avís taronja', 'Avís vermell'];
+    const pane = map.createPane('acaPane'); pane.style.zIndex = 460;
+    const grup = L.layerGroup();
+    const tog = document.getElementById('aca-toggle'), info = document.getElementById('aca-info');
+    const hl = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const f1 = x => (x === null || x === undefined) ? '—' : String(x).replace('.', ',');
+    function pinta(d){
+      grup.clearLayers();
+      let nav = 0;
+      (d.estacions || []).slice().sort((x, y) => x.nivell - y.nivell).forEach(e => {                // els avisos queden al damunt
+        const n = e.nivell, c = COL[n];
+        const m = L.circleMarker([e.lat, e.lon], { pane: 'acaPane', radius: n ? 8 : 4.5, color: n ? '#fff' : '#777', weight: n ? 1.5 : 0.8,
+          opacity: n ? 1 : 0.35, fillColor: c, fillOpacity: n ? 0.92 : 0.28 });
+        const t = e.t ? hl.format(new Date(e.t)) + ' h' : 'sense dada';
+        m.bindPopup(`<div style="font:12px/1.5 var(--font-ui,sans-serif);min-width:190px;">` +
+          `<b>${e.nom || e.id}</b>${e.comarca ? `<br><span style="opacity:.7">${e.comarca}</span>` : ''}` +
+          (n ? `<div style="margin:4px 0;padding:2px 6px;background:${c};color:${n === 1 ? "#222" : "#fff"};display:table;border-radius:2px;font-weight:700;">${NOM[n]}</div>` : '') +
+          `<br>Intensitat: <b>${f1(e.i)} mm/h</b><br>30 min: <b>${f1(e.a30)} mm</b> · 3 h: <b>${f1(e.a3h)} mm</b>` +
+          `<br><span style="opacity:.7">Mesura de les ${t} · ACA</span></div>`);
+        m.addTo(grup);
+        if (n) nav++;
+      });
+      if (info) info.textContent = d.estacions ? (nav ? `${nav} pluviòmetre${nav > 1 ? 's' : ''} en avís (30 min > ${d.llindars['30min'][0]} mm · 3 h > ${d.llindars['3h'][0]} mm)` :
+                                                      `${d.estacions.length} pluviòmetres · cap supera els llindars`) : '';
+    }
+    let timer = null;
+    function carrega(){
+      fetch('data/aca/pluja.json?_=' + Date.now()).then(r => r.ok ? r.json() : Promise.reject()).then(pinta).catch(() => { if (info) info.textContent = 'Sense dades dels pluviòmetres'; });
+    }
+    function activa(on){
+      if (on) { grup.addTo(map); carrega(); clearInterval(timer); timer = setInterval(carrega, 5 * 60 * 1000); }
+      else { map.removeLayer(grup); clearInterval(timer); if (info) info.textContent = ''; }
+    }
+    if (tog) { tog.addEventListener('change', () => activa(tog.checked)); activa(tog.checked); }
+  })();
   // ---- fi Tempestes enganxades ----
