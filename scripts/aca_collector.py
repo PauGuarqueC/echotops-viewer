@@ -57,7 +57,7 @@ def cataleg(sortida, forca=False):
                 except Exception:
                     continue
                 ai = s.get("componentAdditionalInfo") or {}
-                e = est.setdefault(s["component"], {"id": s["component"], "tipus": tipus, "nom": (s.get("componentDesc") or "").strip(),
+                e = est.setdefault((tipus, s["component"]), {"id": s["component"], "tipus": tipus, "nom": (s.get("componentDesc") or "").strip(),
                                                     "lat": round(la, 5), "lon": round(lo, 5), "comarca": ai.get("Comarca"), "vars": []})
                 e["vars"].append({"sensor": s["sensor"], "provider": p["provider"], "nom": (s.get("description") or "").strip(),
                                   "tipus": s.get("type"), "unitat": s.get("unit"), "mostreig_min": (s.get("additionalInfo") or {}).get("Temps mostreig (min)"),

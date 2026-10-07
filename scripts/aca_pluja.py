@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pluja acumulada (30 min i 3 h) dels pluviòmetres de l'ACA i nivell d'avís, a partir de l'arxiu propi del col·lector.
-Entrada:  ~/aca_arxiu/AAAA-MM.csv  +  <sortida>/estacions.json     Sortida: <sortida>/pluja.json
+Entrada:  ~/aca_arxiu/AAAA-MM.csv  +  <sortida>/estacions.json     Sortida: <sortida>/pluja.json i pluja_hist.json
 Els pluviòmetres de l'ACA donen la intensitat (mm/h) cada 5 min; cada mesura es pren com la mitjana dels 5 min anteriors,
 de manera que l'acumulat = suma(intensitat) / 12.
 Nivells: 1 groc = llindar baix en 30 min o en 3 h · 2 taronja = llindar alt en un dels dos · 3 vermell = llindar alt en els dos.
@@ -12,6 +12,7 @@ from pathlib import Path
 LL30 = (20.0, 40.0)        # mm / 30 min (baix, alt)
 LL3H = (60.0, 90.0)        # mm / 3 h   (baix, alt)
 PAS = 5                    # min entre mesures
+HIST_H = 48                # hores d'històric que es publiquen (més 3 h per poder calcular l'acumulat des del principi)
 MAX_EDAT = 30              # min: si l'última mesura és més antiga, l'estació es considera sense dada
 
 
@@ -44,7 +45,7 @@ def main():
                 if v.get("unitat") == "mm/h":
                     sens[v["sensor"]] = e
     ara = datetime.now(timezone.utc)
-    ini = ara - timedelta(hours=3, minutes=10)
+    ini = ara - timedelta(hours=HIST_H + 3, minutes=10)
     mesos = sorted({f"{t:%Y-%m}" for t in (ini, ara)})
     ser = {}                                                               # sensor -> {datetime: mm/h}
     for m in mesos:
@@ -81,6 +82,20 @@ def main():
         out.append({"id": e["id"], "nom": e["nom"], "comarca": e.get("comarca"), "lat": e["lat"], "lon": e["lon"],
                     "t": tl.strftime("%Y-%m-%dT%H:%MZ"), "i": d[tl], "a30": a30, "a3h": a3h, "n": n3h, "nivell": nivell(a30, a3h) if viu else 0})
     res = {"actualitzat": ara.strftime("%Y-%m-%dT%H:%M:%SZ"), "llindars": {"30min": LL30, "3h": LL3H}, "estacions": out}
+    # Històric: intensitat (mm/h) cada 5 min de les últimes HIST_H+3 h, per estació (el visor en calcula els acumulats)
+    fi = ara.replace(second=0, microsecond=0); fi -= timedelta(minutes=fi.minute % PAS)
+    npas = (HIST_H + 3) * 60 // PAS + 1
+    t0 = fi - timedelta(minutes=PAS * (npas - 1))
+    hist = []
+    for s_, e in sens.items():
+        arr = [None] * npas
+        for t, v in ser.get(s_, {}).items():
+            k = round((t - t0).total_seconds() / 60 / PAS)
+            if 0 <= k < npas:
+                arr[k] = round(v, 1) if v else 0
+        hist.append({"id": e["id"], "nom": e["nom"], "comarca": e.get("comarca"), "lat": e["lat"], "lon": e["lon"], "i": arr})
+    (sortida / "pluja_hist.json").write_text(json.dumps({"t0": t0.strftime("%Y-%m-%dT%H:%MZ"), "pas": PAS, "llindars": {"30min": LL30, "3h": LL3H},
+                                                         "estacions": hist}, ensure_ascii=False, separators=(",", ":")))
     (sortida / "pluja.json").write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")))
     nv = [x["nivell"] for x in out]
     print(f"ACA pluja: {len(out)} pluviòmetres · nivell 1/2/3: {nv.count(1)}/{nv.count(2)}/{nv.count(3)} · màxim 30 min: {max([x['a30'] or 0 for x in out], default=0)} mm")
