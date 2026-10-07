@@ -400,19 +400,19 @@
       .fons-ctl{ background:var(--panel,#fff); border:1px solid var(--panel-border,#ccc); border-radius:3px; box-shadow:0 1px 5px rgba(0,0,0,.25);
         font:15px/1.3 var(--font-ui, sans-serif); color:var(--text,#222); position:fixed; left:10px; top:70px; z-index:1100; }
       .fons-ctl .fons-tabs{ display:flex; }
-      .fons-ctl .fons-tab{ flex:1; padding:11px 22px; border:0; background:transparent; color:inherit; font:inherit; cursor:pointer; white-space:nowrap; }
+      .fons-ctl .fons-tab{ flex:1; padding:11px 22px; border:0; background:transparent; color:inherit; font:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap; }
       .fons-ctl .fons-tab + .fons-tab{ border-left:1px solid var(--panel-border,#ccc); }
       .fons-ctl .fons-tab:hover{ color:#C8102E; }
-      .fons-ctl .fons-tab.act{ font-weight:600; color:#C8102E; box-shadow:inset 0 -2px 0 #C8102E; }
+      .fons-ctl .fons-tab.act{ color:#C8102E; box-shadow:inset 0 -2px 0 #C8102E; }
       .fons-ctl .fons-tab[disabled]{ opacity:.45; cursor:default; color:inherit; }
       .fons-ctl .fons-llista{ display:none; border-top:1px solid var(--panel-border,#ccc); padding:6px 0; min-width:270px; }
       .fons-ctl .fons-llista.obert{ display:block; }
-      .fons-ctl .fons-it{ display:flex; gap:10px; align-items:center; padding:8px 16px; cursor:pointer; }
+      .fons-ctl .fons-it{ display:flex; gap:10px; align-items:center; padding:7px 16px; cursor:pointer; font-size:10px; font-weight:400; }
       .fons-ctl .fons-it:hover{ background:rgba(200,16,46,.07); }
-      .fons-ctl .fons-it .pt{ width:10px; height:10px; border-radius:50%; border:1px solid #888; flex:none; }
+      .fons-ctl .fons-it .pt{ width:8px; height:8px; border-radius:50%; border:1px solid #888; flex:none; }
       .fons-ctl .fons-it.sel .pt{ background:#C8102E; border-color:#C8102E; }
-      .fons-ctl .fons-it.sel{ font-weight:600; }
-      .fons-ctl .fons-sep{ padding:8px 16px 3px; font-size:13px; font-weight:600; letter-spacing:.03em; color:var(--text,#222); }
+      .fons-ctl .fons-it.sel{ font-weight:400; }
+      .fons-ctl .fons-sep{ padding:8px 16px 3px; font-size:12px; font-weight:700; color:var(--text,#222); }
       .fons-ctl .fons-sep + .fons-it, .fons-ctl .fons-it + .fons-sep{ }
       .fons-ctl .fons-sep:not(:first-child){ border-top:1px solid var(--panel-border,#ddd); margin-top:4px; padding-top:10px; }`;
     document.head.appendChild(st);
