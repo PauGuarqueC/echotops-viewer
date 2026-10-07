@@ -1788,12 +1788,7 @@ function initMap(){
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
       }
       if (!opt.senseLimits){
-        if (net){ await limCarrega(); expLimits(ctx, P, k); }
-        else{
-          const wi = await limWms(nw, se, MW, MH);
-          if (wi) limDibuixaWms(ctx, wi, MW, MH);
-          else { await limCarrega(); expLimits(ctx, P, k); }                      // si el WMS no respon: comarques.geojson
-        }
+        await limCarrega(); expLimits(ctx, P, k);                                  // contorns sempre des de comarques.geojson (el WMS porta noms)
       }
       expVectors(ctx, P, k);
       ctx.restore();
@@ -1837,7 +1832,7 @@ function initMap(){
       blocs.forEach(b => { const w = Math.min(util * b.w / tot, 520 * u); b.f(cx, fy + 7 * u, w); cx += w + gap; });
       ctx.fillStyle = '#7b8794'; ctx.font = `400 ${9 * u}px ${EXP_FONT}`; ctx.textAlign = 'left';
       const cred = [echoOn ? 'Meteocat' : '', (reflOn || stormOn) ? 'AEMET' : '', satOn ? '© EUMETSAT' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
-      const txtCred = `Dades: ${cred}  |  Mapa base: ${base.length ? (currentBase === 'satelit' ? 'Esri' : currentBase === 'topo' ? '© OpenTopoMap · OSM' : '© CARTO · © OpenStreetMap') : ''}`;
+      const txtCred = `Dades: ${cred}  |  Mapa base: ${base.length ? (currentBase === 'satelit' ? 'Esri' : currentBase === 'icgc' ? '© ICGC' : currentBase === 'topo' ? '© OpenTopoMap · OSM' : '© CARTO · © OpenStreetMap') : ''}`;
       ctx.fillText(txtCred, pad, fy + FH - 8 * u);
       if (totBase && fallBase > totBase * 0.2) { ctx.textAlign = 'right'; ctx.fillStyle = '#C8102E'; ctx.fillText('Atenció: part del mapa base no s\'ha pogut carregar', Wc - pad, fy + FH - 8 * u); }
 
