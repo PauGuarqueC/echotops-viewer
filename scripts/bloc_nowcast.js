@@ -1675,7 +1675,7 @@
     }
     function popup(f){
       const id = idDe(f), ms = msAra(), ara = Date.now(), nom = f.properties.nom_comar || ('Comarca ' + id);
-      const llista = D ? D.periodes.filter(p => p.comarques[id]).sort((a, b) => a.ini < b.ini ? -1 : 1) : [];
+      const llista = D ? D.periodes.filter(p => p.comarques[id] && Date.parse(p.fi) > ara).sort((a, b) => a.ini < b.ini ? -1 : 1) : [];
       let h = '<div style="font:12px/1.5 var(--font-ui,sans-serif);min-width:230px;max-width:300px"><b>' + nom + '</b>';
       if (!llista.length) return h + '<br><span style="opacity:.7">Cap avís del Meteocat per a aquesta comarca.</span></div>';
       h += llista.map(p => {

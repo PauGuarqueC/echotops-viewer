@@ -22,7 +22,7 @@ python3 scripts/models_export.py --wrf-dir /home/labfire/data/SMC-WRF --arome-di
 python3 scripts/aca_collector.py --sortida data/aca || echo "aca: error" >&2
 python3 scripts/aca_pluja.py --sortida data/aca || echo "aca pluja: error" >&2
 python3 scripts/gen_dies.py || echo "aca dies: error" >&2
-python3 scripts/smp_collector.py 60 || echo "smp: error" >&2
+python3 scripts/smp_collector.py 360 || echo "smp: error" >&2
 
 git add data/
 if git diff --cached --quiet; then
