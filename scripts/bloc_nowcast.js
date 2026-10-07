@@ -1819,7 +1819,7 @@
       const a = document.getElementById('ts-date'), b = document.getElementById('ts-time'), c = document.getElementById('ts-utc');
       if (a) a.textContent = pc.day + '/' + pc.month + '/' + pc.year;
       if (b) b.textContent = pc.hour + ':' + pc.minute;
-      if (c) c.textContent = new Date(T).toISOString().slice(11, 16) + ' UTC · previsió';
+      if (c) c.textContent = new Date(T).toISOString().slice(11, 16) + ' UTC';
     }
     function ocultaObs(on){                                  // en previsio no hi ha observacio: s'amaguen les capes d'observacio
       if (on){
