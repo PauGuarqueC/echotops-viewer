@@ -1361,8 +1361,6 @@
         const b = ov.getBounds(), a = P(b.getNorthWest()), c = P(b.getSouthEast());
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
       }
-      const avOn = !!(window.smpExp && window.smpExp.actiu()), avMs = avOn ? window.smpExp.ms() : 0;
-      if (avOn) window.smpExp.dibuixa(ctx, P, u, avMs);
       if (!opt.senseLimits){
         await limCarrega(); expLimits(ctx, P, k);                                  // contorns sempre des de comarques.geojson (el WMS porta noms)
       }
@@ -1392,13 +1390,6 @@
         blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, `${MM.nom.toUpperCase()} · ${hor ? 'PLUJA HORÀRIA (mm/h)' : 'PLUJA ACUMULADA' + (mod.acum ? ' ' + mod.acum + ' h' : ' DES DE L\'INICI') + ' (mm)'}`,
           [MOD_ZERO].concat(P.map(q => q[1])), P.map(q => String(q[0])), 'alterna') });
       }
-      if (avOn) blocs.push({ w: 2.6, f: (x, y, w) => {
-        const lg = window.smpExp.llegenda(avMs);
-        ctx.fillStyle = '#52606d'; ctx.font = `600 ${9.5 * u}px ${EXP_FONT}`; ctx.textBaseline = 'middle'; ctx.fillText('AVISOS METEOCAT (SMP)', x, y + 5 * u);
-        if (!lg.items.length){ ctx.fillStyle = '#7b8794'; ctx.font = `500 ${9.5 * u}px ${EXP_FONT}`; ctx.fillText('Cap comarca en avís', x, y + 19 * u); }
-        lg.items.forEach(([c, t], i) => { const yy = y + (18 + i * 13) * u; ctx.fillStyle = c; ctx.globalAlpha = 0.8; ctx.fillRect(x, yy - 4 * u, 12 * u, 8 * u); ctx.globalAlpha = 1;
-          ctx.fillStyle = '#243b53'; ctx.font = `500 ${9.5 * u}px ${EXP_FONT}`; ctx.fillText(t, x + 17 * u, yy); });
-      } });
       blocs.push({ w: 2.4, f: (x, y, w) => {
         ctx.fillStyle = '#52606d'; ctx.font = `600 ${9.5 * u}px ${EXP_FONT}`; ctx.textBaseline = 'middle'; ctx.fillText(modOn ? 'PREVISIÓ VÀLIDA' : 'DATA I HORA', x, y + 5 * u);
         const hh = nowcHoraLocal(ms);
@@ -1414,7 +1405,7 @@
       let cx = pad; const util = Wc - 2 * pad - gap * Math.max(0, blocs.length - 1);
       blocs.forEach(b => { const w = Math.min(util * b.w / tot, 520 * u); b.f(cx, fy + 7 * u, w); cx += w + gap; });
       ctx.fillStyle = '#7b8794'; ctx.font = `400 ${9 * u}px ${EXP_FONT}`; ctx.textAlign = 'left';
-      const cred = [(echoOn || avOn) ? 'Meteocat' : '', (reflOn || stormOn) ? 'AEMET' : '', satOn ? '© EUMETSAT' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
+      const cred = [echoOn ? 'Meteocat' : '', (reflOn || stormOn) ? 'AEMET' : '', satOn ? '© EUMETSAT' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
       const txtCred = `Dades: ${cred}  |  Mapa base: ${base.length ? (currentBase === 'satelit' ? 'Esri' : currentBase === 'icgc' ? '© ICGC' : currentBase === 'topo' ? '© OpenTopoMap · OSM' : '© CARTO · © OpenStreetMap') : ''}`;
       ctx.fillText(txtCred, pad, fy + FH - 8 * u);
       if (totBase && fallBase > totBase * 0.2) { ctx.textAlign = 'right'; ctx.fillStyle = '#C8102E'; ctx.fillText('Atenció: part del mapa base no s\'ha pogut carregar', Wc - pad, fy + FH - 8 * u); }
@@ -1650,7 +1641,7 @@
   // ---- Avisos SMP del Meteocat per comarques (data/smp/avisos.json, generat per smp_collector.py) ----
   // Segueixen el control de previsio dels models (mod.sel / mod.t) si es actiu. Si no, slider propi (smp-ctl) o la barra de temps del radar.
   (function(){
-    const COL = ['#888888', '#F28C00', '#C8102E'];             // per nivell: 1 = llindar baix (taronja), 2 = llindar alt (vermell)
+    const COL = ['#888888', '#F2C200', '#F28C00', '#C8102E'], grup = p => Math.min(3, Math.max(1, Math.ceil(p / 2)));             // per perill (1-6): 1-2 groc, 3-4 taronja, 5-6 vermell
     const ref = document.getElementById('aca-info');
     if (!ref) return;
     const pane = map.createPane('smpPane'); pane.style.zIndex = 450;
@@ -1707,8 +1698,8 @@
         const x = p.comarques[id], i = Date.parse(p.ini), fi = Date.parse(p.fi);
         const act = ms >= i && ms < fi;
         const estat = i > ara ? ' (previsió)' : ' (vigent)';
-        return '<div style="margin-top:6px;padding:3px 6px;border-left:4px solid ' + COL[Math.min(x.nivell, 2)] + ';' + (act ? 'background:rgba(128,128,128,.22);' : '') + '">' +
-          '<b>' + etiq(p) + '</b>' + estat + '' + '<br>' + p.meteor + '<br>' + x.llindar + ' · perill ' + x.perill + '</div>';
+        return '<div style="margin-top:6px;padding:3px 6px;border-left:4px solid ' + COL[grup(x.perill)] + ';' + (act ? 'background:rgba(128,128,128,.22);' : '') + '">' +
+          '<b>' + etiq(p) + '</b>' + estat + '' + '<br>' + p.meteor + '<br>' + x.llindar + ' · perill ' + x.perill + '/6</div>';
       }).join('');
       return h + '<div style="margin-top:6px;opacity:.6;font-size:10px">Hores locals · Meteocat</div></div>';
     }
@@ -1720,12 +1711,12 @@
       const n = vigents(msAra());
       cap.eachLayer(l => {
         const x = n[idDe(l.feature)];
-        const sk = x ? Math.min(x.nivell, 2) + '|' + x.perill : '';
+        const sk = x ? String(x.perill) : '';
         if (l._smpSk === sk) return;
         l._smpSk = sk;
         if (!x) { l.setStyle({ stroke: false, fillOpacity: 0 }); return; }
-        const c = COL[Math.min(x.nivell, 2)];
-        l.setStyle({ stroke: true, color: c, weight: 2, opacity: 0.9, fillColor: c, fillOpacity: 0.12 + 0.05 * x.perill });
+        const c = COL[grup(x.perill)];
+        l.setStyle({ stroke: true, color: c, weight: 2, opacity: 0.9, fillColor: c, fillOpacity: 0.3 });
       });
       const k = Object.keys(n).length;
       info.textContent = !D ? 'Sense dades dels avisos' :
@@ -1760,21 +1751,21 @@
       ms: () => msAra(),
       llegenda: ms => {
         const n = vigents(ms), it = {};
-        Object.keys(n).forEach(c => { it[n[c].nivell] = n[c].llindar; });
-        return { items: Object.keys(it).sort().map(k => [COL[Math.min(+k, 2)], it[k]]) };
+        Object.keys(n).forEach(c => { it[grup(n[c].perill)] = 1; });
+        return { items: Object.keys(it).sort().map(k => [COL[+k], 'Perill ' + (2 * k - 1) + '–' + (2 * k) + ' de 6']) };
       },
       dibuixa: (ctx, P, u, ms) => {
         const n = vigents(ms);
         cap.eachLayer(l => {
           const x = n[idDe(l.feature)]; if (!x) return;
-          const c = COL[Math.min(x.nivell, 2)], g = l.feature.geometry;
+          const c = COL[grup(x.perill)], g = l.feature.geometry;
           const pols = g.type === 'MultiPolygon' ? g.coordinates : [g.coordinates];
           ctx.beginPath();
           pols.forEach(pol => pol.forEach(ring => {
             ring.forEach(([lon, lat], i) => { const p = P(L.latLng(lat, lon)); if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
             ctx.closePath();
           }));
-          ctx.fillStyle = c; ctx.globalAlpha = 0.12 + 0.05 * x.perill; ctx.fill('evenodd');
+          ctx.fillStyle = c; ctx.globalAlpha = 0.3; ctx.fill('evenodd');
           ctx.strokeStyle = c; ctx.globalAlpha = 0.9; ctx.lineWidth = Math.max(1.5, 1.8 * u); ctx.lineJoin = 'round'; ctx.stroke();
           ctx.globalAlpha = 1;
         });
