@@ -930,7 +930,7 @@
       let c = new Uint8Array(N), altres = 0;                                  // 1 mar, 2 terra, 3 línia, 0 altres
       for (let i = 0, p = 0; p < N; i += 4, p++){
         const rr = d[i], mx = Math.max(rr, d[i + 1], d[i + 2]), mn = Math.min(rr, d[i + 1], d[i + 2]);
-        if (mx - mn <= 6){ if (Math.abs(rr - 215) <= 3) c[p] = 1; else if (Math.abs(rr - 183) <= 3) c[p] = 2; else if (rr >= 222) c[p] = 3; }
+        if (mx - mn <= 6){ if (Math.abs(rr - 215) <= 3) c[p] = 1; else if (Math.abs(rr - 183) <= 3) c[p] = 2; }   // les línies i halos de la tessel·la (≥222) no es classifiquen: s'omplen amb els veïns i les línies es dibuixen des de comarques.geojson
         if (!c[p]) altres++;
       }
       if (altres > N * 0.4) return null;                                      // colors inesperats (p. ex. relleu): no es toca la base
@@ -952,9 +952,8 @@
           if (t < thr){ for (let i = 0; i < t; i++) c[q[i]] = 0; altres += t; }
         }
       };
-      elimina(3, Math.round(300 * W / 1500), 2);                                 // línies: només les llargues i contínues (comarques, províncies, països); fora halos i municipis puntejats
       elimina(1, Math.round(1500 * W / 1500), 1);                                // mar: fora els petits anells que deixa el text suavitzat
-      const lin = c.slice();                                                  // línies originals (3) abans d'omplir
+      const lin = new Uint8Array(N);                                                  // línies originals (3) abans d'omplir
       {                                                                       // terra fi (≤2 px) = vora suavitzada d'un text sobre el mar: es descarta
         const n = c.slice();
         for (let y = 0, p = 0; y < H; y++) for (let x = 0; x < W; x++, p++){
@@ -981,7 +980,7 @@
         const i = p * 4, k = c[p], v = (lin[p] === 3 || k === 3) ? 255 : (k === 1 ? 215 : 183);
         b[i] = b[i + 1] = b[i + 2] = v; b[i + 3] = 255;
         const costa = k === 1 && ((x > 0 && c[p - 1] === 2) || (x < W - 1 && c[p + 1] === 2) || (y > 0 && c[p - W] === 2) || (y < H - 1 && c[p + W] === 2));
-        if (lin[p] === 3 || costa){ ld[i] = ld[i + 1] = ld[i + 2] = 255; ld[i + 3] = 255; }
+        if (false && costa){ ld[i] = ld[i + 1] = ld[i + 2] = 255; ld[i + 3] = 255; }
       }
       const cb = document.createElement('canvas'); cb.width = W; cb.height = H; cb.getContext('2d').putImageData(bi, 0, 0);
       const cl = document.createElement('canvas'); cl.width = W; cl.height = H; cl.getContext('2d').putImageData(li, 0, 0);
@@ -1031,9 +1030,9 @@
     anells.forEach(r => { for (let i = 1; i < r.length; i++){ segs.push([r[i - 1], r[i]]); const c = clau(r[i - 1], r[i]); cnt.set(c, (cnt.get(c) || 0) + 1); } });
     const ext = segs.filter(([p, q]) => cnt.get(clau(p, q)) === 1);
     if (ext.length > 0 && ext.length < segs.length * 0.5){
-      traça(segs.filter(([p, q]) => cnt.get(clau(p, q)) > 1), 0.55, 0.5);          // vores interiors entre comarques
+      traça(segs.filter(([p, q]) => cnt.get(clau(p, q)) > 1), 0.8, 0.75);          // vores interiors entre comarques
       traça(ext, 1.2, 0.9);                                                          // contorn exterior
-    }else traça(segs, 0.7, 0.6);                                                     // dades no topològiques: tot igual
+    }else traça(segs, 1.0, 0.8);                                                     // dades no topològiques: tot igual
   }
 
   // ---- Exportació d'imatge: l'usuari tria l'àrea i es compon (a alta resolució) amb les capes actives i les seves llegendes ----
@@ -1279,7 +1278,7 @@
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
       }
       if (cat && !opt.senseLimits){
-        if (net) limDibuixaNet(ctx, net.linies, MW);
+        if (net){ await limCarrega(); expLimits(ctx, P, k); }
         else{
           const wi = await limWms(nw, se, MW, MH);
           if (wi) limDibuixaWms(ctx, wi, MW, MH);
