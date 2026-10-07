@@ -1083,7 +1083,7 @@
       '<select id="exp-rang" style="display:none" title="Durada">' + (modo
         ? [6, 12, 24, 48].map(h => `<option value="${h}"${h === 12 ? ' selected' : ''}>Següents ${h} h</option>`).join('')
         : [1, 2, 3, 6].map(h => `<option value="${h}"${h === 3 ? ' selected' : ''}>Últimes ${h} h</option>`).join('')) + '</select>' +
-      '<select id="exp-vel" style="display:none" title="Fotogrames per segon">' + [2, 4, 6, 8].map(f => `<option value="${f}"${f === (modo ? 2 : 4) ? ' selected' : ''}>${f} fps</option>`).join('') + '</select>' +
+      '<select id="exp-vel" style="display:none" title="Fotogrames per segon">' + [2, 4, 6, 8, 10].map(f => `<option value="${f}"${f === 4 ? ' selected' : ''}>${f} fps</option>`).join('') + '</select>' +
       '<button data-a="tot">Tot Catalunya</button><button data-a="no">Cancel·la</button>';
     document.body.appendChild(bar); EXP.bar = bar;
     L.DomEvent.disableClickPropagation(bar);
@@ -1385,7 +1385,7 @@
         for (let i = 0; i <= i1; i++) if (t1 - tsToDate(vt[i]).getTime() <= n * 3600000) frames.push(async () => { showFrame(i); await espera(); });
         restaura.push(async () => { showFrame(orig); });
       }
-      let last = null, prev = null, dl = Math.round(1000 / (+(EXP.bar.querySelector('#exp-vel').value) || (modo ? 2 : 4)));
+      let last = null, prev = null, dl = Math.round(1000 / (+(EXP.bar.querySelector('#exp-vel').value) || 4));
       for (let i = 0; i < frames.length && nFot < EXP_GIF_MAX; i++){
         expMissatge(`<b>Generant GIF…</b> fotograma ${i + 1} / ${frames.length}`);
         await frames[i]();
