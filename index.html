@@ -1764,7 +1764,7 @@ function initMap(){
       let fallBase = 0, totBase = 0;
       // Sense noms: CARTO en versió "nolabels"; la base ICGC es neteja (mar i terra plans, es conserven les línies i es dibuixa la costa)
       const icgcL = (typeof baseLayers !== 'undefined') ? baseLayers.icgc : null;
-      const net = (cat && icgcL && base.includes(icgcL)) ? await icgcNet(nw, se, org, Zf, MW, MH) : null;
+      const net = (icgcL && base.includes(icgcL)) ? await icgcNet(nw, se, org, Zf, MW, MH) : null;
       for (const l of base){
         if (l === icgcL && net){ ctx.drawImage(net.base, 0, 0); continue; }
         const zt = Math.min(l.options.maxZoom || 12, Math.round(Zf)), sc = Math.pow(2, Zf - zt);
@@ -1787,7 +1787,7 @@ function initMap(){
         const b = ov.getBounds(), a = P(b.getNorthWest()), c = P(b.getSouthEast());
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
       }
-      if (cat && !opt.senseLimits){
+      if (!opt.senseLimits){
         if (net){ await limCarrega(); expLimits(ctx, P, k); }
         else{
           const wi = await limWms(nw, se, MW, MH);
