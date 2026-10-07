@@ -2150,7 +2150,7 @@ function initMap(){
   })();
   // ---- Avisos SMP del Meteocat per comarques (data/smp/avisos.json, generat per smp_collector.py): segueixen la barra de temps ----
   (function(){
-    const COL = ['#888888', '#F2C200', '#F28C00', '#C8102E', '#7B1FA2'];    // perill 0..4
+    const COL = ['#888888', '#F28C00', '#C8102E'];    // per nivell: 1 = llindar baix (taronja), 2 = llindar alt (vermell)
     const ref = document.getElementById('aca-info');
     if (!ref) return;
     const pane = map.createPane('smpPane'); pane.style.zIndex = 450;
@@ -2181,20 +2181,20 @@ function initMap(){
     function pinta(){
       if (!cap || !tog.checked) return;
       const n = vigents(tsS ? msDe(tsS) : Date.now());
-      const per = {}, mets = {};
+      const per = {}, mets = {}, llin = {};
       cap.eachLayer(l => {
         const x = n[idDe(l.feature)];
         if (!x) { l.setStyle({ stroke: false, fillOpacity: 0 }); return; }
-        const c = COL[Math.min(x.perill, 4)];
-        l.setStyle({ stroke: true, color: c, weight: 2, opacity: 0.9, fillColor: c, fillOpacity: 0.28 });
-        (per[x.perill] = per[x.perill] || []).push(l.feature.properties.nom_comar);
+        const c = COL[Math.min(x.nivell, 2)];
+        l.setStyle({ stroke: true, color: c, weight: 2, opacity: 0.9, fillColor: c, fillOpacity: 0.12 + 0.05 * x.perill });
+        (per[x.nivell] = per[x.nivell] || []).push(l.feature.properties.nom_comar + ' (' + x.perill + ')'); llin[x.nivell] = x.llindar;
         mets[x.meteor] = 1;
       });
       if (!D) info.textContent = 'Sense dades dels avisos';
       else if (!Object.keys(per).length) info.textContent = 'Cap comarca amb avís del Meteocat en aquest instant';
       else info.innerHTML = Object.keys(per).sort((a, b) => b - a).map(p =>
-          '<span style="color:' + COL[Math.min(+p, 4)] + '">&#9632;</span> Perill ' + p + ': ' + per[p].sort().join(', ')).join('<br>') +
-        '<br><span style="opacity:.7">' + Object.keys(mets).join(', ') + ' · Meteocat</span>';
+          '<span style="color:' + COL[Math.min(+p, 2)] + '">&#9632;</span> ' + llin[p] + ': ' + per[p].sort().join(', ')).join('<br>') +
+        '<br><span style="opacity:.7">' + Object.keys(mets).join(', ') + ' · Meteocat · entre parèntesis, el perill (1-5)</span>';
     }
     function carrega(){
       const g = cap ? Promise.resolve(null) : fetch('data/comarques.geojson').then(r => r.json());
