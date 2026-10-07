@@ -913,6 +913,65 @@
 
   // ---- Contorns i noms a les exportacions (imatge i GIF), no al visor ----
   // Els límits de comarques (WMS de l'ICGC; si no respon, data/comarques.geojson) es dibuixen en blanc per sobre de les capes de dades. Sense noms.
+  // Base ICGC neta de noms. Les tessel·les "administratiu" tenen mar = gris clar pla (≈215), terra = gris pla (≈183), línies blanques i text fosc.
+  // Es classifica cada píxel; el que no és ni mar ni terra ni línia (text, vores suavitzades) s'omple amb els veïns. Retorna {base, linies} o null.
+  const LIM_GRUIX = 0.6, LIM_OPAC = 0.9;       // gruix extra (px a 1500 d'ample) i opacitat de les línies de límits sobre les dades
+  async function icgcNet(nw, se, org, Zf, W, H){
+    const l = baseLayers.icgc; if (!l) return null;
+    try{
+      const t = document.createElement('canvas'); t.width = W; t.height = H;
+      const g = t.getContext('2d', { willReadFrequently: true });
+      const tam = (l.options.tileSize && l.options.tileSize.x) || l.options.tileSize || 256, zt = Math.min(l.options.maxZoom || 18, Math.round(Zf)), sc = Math.pow(2, Zf - zt);
+      const r = await expTessel(g, { tam, zt, nw, se, alpha: 1, prog: () => {},
+        url: (x, y) => { const tz = l._tileZoom; l._tileZoom = zt; try{ return l.getTileUrl({ x, y, z: zt }); } finally { l._tileZoom = tz; } },
+        rect: (x, y) => [x * tam * sc - org.x, y * tam * sc - org.y, tam * sc, tam * sc] });
+      if (!r.total || r.fallats > r.total * 0.3) return null;
+      const im = g.getImageData(0, 0, W, H), d = im.data, N = W * H;
+      let c = new Uint8Array(N), altres = 0;                                  // 1 mar, 2 terra, 3 línia, 0 altres
+      for (let i = 0, p = 0; p < N; i += 4, p++){
+        const rr = d[i], mx = Math.max(rr, d[i + 1], d[i + 2]), mn = Math.min(rr, d[i + 1], d[i + 2]);
+        if (mx - mn <= 6){ if (Math.abs(rr - 215) <= 3) c[p] = 1; else if (Math.abs(rr - 183) <= 3) c[p] = 2; else if (rr >= 228) c[p] = 3; }
+        if (!c[p]) altres++;
+      }
+      if (altres > N * 0.4) return null;                                      // colors inesperats (p. ex. relleu): no es toca la base
+      const lin = c.slice();                                                  // línies originals (3) abans d'omplir
+      {                                                                       // terra fi (≤2 px) = vora suavitzada d'un text sobre el mar: es descarta
+        const n = c.slice();
+        for (let y = 0, p = 0; y < H; y++) for (let x = 0; x < W; x++, p++){
+          if (c[p] !== 2) continue;
+          const v = (x > 0 && c[p - 1] === 2) + (x < W - 1 && c[p + 1] === 2) + (y > 0 && c[p - W] === 2) + (y < H - 1 && c[p + W] === 2);
+          if (v < 3){ n[p] = 0; altres++; }
+        }
+        c = n;
+      }
+      for (let pas = 0; pas < 5 && altres > 0; pas++){                        // omple text i vores amb mar/terra veïns
+        const n = c.slice();
+        for (let y = 0, p = 0; y < H; y++) for (let x = 0; x < W; x++, p++){
+          if (c[p]) continue;
+          let m = 0, tr = 0;
+          for (const q of [x > 0 ? c[p - 1] : 0, x < W - 1 ? c[p + 1] : 0, y > 0 ? c[p - W] : 0, y < H - 1 ? c[p + W] : 0]){ if (q === 1) m++; else if (q === 2) tr++; }
+          if (m || tr){ n[p] = tr >= m ? 2 : 1; altres--; }
+        }
+        c = n;
+      }
+      for (let p = 0; p < N; p++) if (!c[p]) c[p] = 2;
+      // base: mar, terra i línies originals en blanc
+      const bi = g.createImageData(W, H), li = g.createImageData(W, H), b = bi.data, ld = li.data;
+      for (let y = 0, p = 0; y < H; y++) for (let x = 0; x < W; x++, p++){
+        const i = p * 4, k = c[p], v = (lin[p] === 3 || k === 3) ? 255 : (k === 1 ? 215 : 183);
+        b[i] = b[i + 1] = b[i + 2] = v; b[i + 3] = 255;
+        const costa = k === 1 && ((x > 0 && c[p - 1] === 2) || (x < W - 1 && c[p + 1] === 2) || (y > 0 && c[p - W] === 2) || (y < H - 1 && c[p + W] === 2));
+        if (lin[p] === 3 || costa){ ld[i] = ld[i + 1] = ld[i + 2] = 255; ld[i + 3] = 255; }
+      }
+      const cb = document.createElement('canvas'); cb.width = W; cb.height = H; cb.getContext('2d').putImageData(bi, 0, 0);
+      const cl = document.createElement('canvas'); cl.width = W; cl.height = H; cl.getContext('2d').putImageData(li, 0, 0);
+      return { base: cb, linies: cl };
+    }catch(e){ console.warn('base ICGC', e); return null; }
+  }
+  function limDibuixaNet(ctx, cl, W){
+    const gr = Math.max(1, Math.round(LIM_GRUIX * W / 1500)), ds = [[0, 0], [gr, 0], [-gr, 0], [0, gr], [0, -gr], [gr, gr], [-gr, gr], [gr, -gr], [-gr, -gr]];
+    ctx.globalAlpha = LIM_OPAC; ds.forEach(([dx, dy]) => ctx.drawImage(cl, dx, dy)); ctx.globalAlpha = 1;
+  }
   // Límits de comarques de l'ICGC (WMS, PNG transparent). Es demana una sola imatge per a tota l'àrea exportada, i es pinta de blanc.
   const LIM_WMS = 'https://geoserveis.icgc.cat/servei/catalunya/divisions-administratives/wms';
   const LIM_CAPES = ['1000000', '500000', '250000', '100000', '50000', '5000'].map(n => 'divisions_administratives_comarques_' + n).join(',');
@@ -1174,10 +1233,14 @@
       ctx.fillStyle = '#cfd6dd'; ctx.fillRect(0, 0, MW, MH);
       let prog = opt.prog || ((n, t) => expMissatge(`<b>Generant imatge…</b> ${n} / ${t} tessel·les`));
       let fallBase = 0, totBase = 0;
+      // Sense noms: CARTO en versió "nolabels"; la base ICGC es neteja (mar i terra plans, es conserven les línies i es dibuixa la costa)
+      const icgcL = (typeof baseLayers !== 'undefined') ? baseLayers.icgc : null;
+      const net = (icgcL && base.includes(icgcL)) ? await icgcNet(nw, se, org, Zf, MW, MH) : null;
       for (const l of base){
+        if (l === icgcL && net){ ctx.drawImage(net.base, 0, 0); continue; }
         const zt = Math.min(l.options.maxZoom || 12, Math.round(Zf)), sc = Math.pow(2, Zf - zt);
         const r = await expTessel(ctx, { tam: 256, zt, nw, se, alpha: l.options.opacity === undefined ? 1 : l.options.opacity, prog,
-          url: (x, y) => { const tz = l._tileZoom; l._tileZoom = zt; try{ return l.getTileUrl({ x, y, z: zt }); } finally { l._tileZoom = tz; } },
+          url: (x, y) => { const tz = l._tileZoom; l._tileZoom = zt; try{ return l.getTileUrl({ x, y, z: zt }).replace('/light_all/', '/light_nolabels/').replace('/dark_all/', '/dark_nolabels/'); } finally { l._tileZoom = tz; } },
           rect: (x, y) => [x * 256 * sc - org.x, y * 256 * sc - org.y, 256 * sc, 256 * sc] });
         fallBase += r.fallats; totBase += r.total;
       }
@@ -1196,9 +1259,12 @@
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
       }
       if (!opt.senseLimits){
-        const wi = await limWms(nw, se, MW, MH);
-        if (wi) limDibuixaWms(ctx, wi, MW, MH);
-        else { await limCarrega(); expLimits(ctx, P, k); }                        // si el WMS no respon: comarques.geojson
+        if (net) limDibuixaNet(ctx, net.linies, MW);
+        else{
+          const wi = await limWms(nw, se, MW, MH);
+          if (wi) limDibuixaWms(ctx, wi, MW, MH);
+          else { await limCarrega(); expLimits(ctx, P, k); }                      // si el WMS no respon: comarques.geojson
+        }
       }
       expVectors(ctx, P, k);
       ctx.restore();
