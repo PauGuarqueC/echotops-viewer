@@ -1471,7 +1471,7 @@
       let last = null, prev = null, dl = Math.round(1000 / (+(EXP.bar.querySelector('#exp-vel').value) || 4));
       for (let i = 0; i < frames.length && nFot < EXP_GIF_MAX; i++){
         expMissatge(`<b>Generant GIF…</b> fotograma ${i + 1} / ${frames.length}`);
-        await frames[i]();
+        window.expFins = Date.now() + 20000; await frames[i]();
         const sg = sig() + '|' + (modo ? mod.t : '');
         if (sg === prev) continue; prev = sg;
         const r = await expCompon(x0, y0, x1, y1, { llarg: 1100, ample: 1100, sil: true, prog: () => {}, cat: EXP.cat });
@@ -1840,7 +1840,7 @@
       if (modeT === 'prev'){
         const T = Tsel !== null ? Tsel : nowRef;
         ocultaObs(true);
-        if (m){ const h = Math.round(T / 3600000) * 3600000; if (m.t !== h){ m.t = h; modMostra(); } }
+        if (m){ const h = Math.round(T / 3600000) * 3600000; if (!(Date.now() < (window.expFins || 0)) && m.t !== h){ m.t = h; modMostra(); } }
         escriuHora(T);
       } else {
         if (obsOcult) ocultaObs(false);
@@ -1932,7 +1932,7 @@
         window.tlT = tlTval();
         if (modeT === 'prev'){                                          // re-afirma l'estat de previsio si una actualitzacio del manifest el trenca
           ocultaObs(true); escriuHora(Tsel !== null ? Tsel : nowRef);
-          const m = modSel(); if (m){ const h = Math.round((Tsel !== null ? Tsel : nowRef) / 3600000) * 3600000; if (m.t !== h){ m.t = h; modMostra(); } }
+          const m = modSel(); if (m){ const h = Math.round((Tsel !== null ? Tsel : nowRef) / 3600000) * 3600000; if (!(Date.now() < (window.expFins || 0)) && m.t !== h){ m.t = h; modMostra(); } }
         }
         if (!dragging){
           let Tc;
