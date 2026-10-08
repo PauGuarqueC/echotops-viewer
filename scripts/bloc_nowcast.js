@@ -1641,7 +1641,7 @@
   // ---- Avisos SMP del Meteocat per comarques (data/smp/avisos.json, generat per smp_collector.py) ----
   // Segueixen el control de previsio dels models (mod.sel / mod.t) si es actiu. Si no, slider propi (smp-ctl) o la barra de temps del radar.
   (function(){
-    const COL = ['#888888', '#F2C200', '#F28C00', '#C8102E'], grup = p => Math.min(3, Math.max(1, Math.ceil(p / 2)));             // per perill (1-6): 1-2 groc, 3-4 taronja, 5-6 vermell
+    const COL = ['#888888', '#FFE000', '#F28C00', '#C8102E'], grup = p => Math.min(3, Math.max(1, Math.ceil(p / 2)));             // per perill (1-6): 1-2 groc, 3-4 taronja, 5-6 vermell
     const ref = document.getElementById('aca-info');
     if (!ref) return;
     const pane = map.createPane('smpPane'); pane.style.zIndex = 450;
