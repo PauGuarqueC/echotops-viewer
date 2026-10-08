@@ -189,9 +189,14 @@ def exporta_arome(carpeta, sortida, forca, res_deg, bbox):
     meta_p = dest / "meta.json"
     if not forca and meta_p.exists():
         try:
-            if json.loads(meta_p.read_text()).get("run_utc") == run_txt:
-                print(f"AROME: run {run_txt} ja exportat")
-                return json.loads(meta_p.read_text())
+            mj = json.loads(meta_p.read_text())
+            n_esp = None                                                      # passos que tindria l'exportació d'aquest .npz (H+0 inclòs)
+            if usa_npz:
+                ps = [int(q) for q in np.load(fitxer)["passos"]]
+                n_esp = len(ps) + (0 if 0 in ps else 1)
+            if mj.get("run_utc") == run_txt and (n_esp is None or mj.get("passos") == n_esp):
+                print(f"AROME: run {run_txt} ja exportat ({mj.get('passos')} passos)")
+                return mj
         except Exception:
             pass
     acum = {}
