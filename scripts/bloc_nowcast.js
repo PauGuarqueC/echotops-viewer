@@ -1361,6 +1361,9 @@
         const b = ov.getBounds(), a = P(b.getNorthWest()), c = P(b.getSouthEast());
         ctx.globalAlpha = ov.options.opacity; ctx.drawImage(im, a[0], a[1], c[0] - a[0], c[1] - a[1]); ctx.globalAlpha = 1;
       }
+      if (window.smpExp && window.smpExp.actiu()){                             // avisos SMP per comarques
+        try{ window.smpExp.dibuixa(ctx, P, u, modOn ? mod.t : nowcMs(expTs().replace('_', ''))); }catch(e){ console.warn('avisos exportacio', e); }
+      }
       if (!opt.senseLimits){
         await limCarrega(); expLimits(ctx, P, k);                                  // contorns sempre des de comarques.geojson (el WMS porta noms)
       }
