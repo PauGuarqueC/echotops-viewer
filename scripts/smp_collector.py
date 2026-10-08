@@ -47,6 +47,7 @@ for em, meteor, a in items:                                   # de més antic a 
             store[key] = {'meteor': meteor, 'ini': F(ini), 'fi': F(ini + dt.timedelta(hours=6)), 'emissio': em, 'comarques': com}
 ara = F(dt.datetime.now(UTC))
 per = sorted((p for p in store.values() if p['comarques'] and p['fi'] > ara), key=lambda p: (p['ini'], p['meteor']))
+per = [p for p in per if any(k in p['meteor'].lower() for k in ('pluja', 'temps violent', 'neu'))]
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 tmp = OUT + '.tmp'
 json.dump({'actualitzat': ara, 'periodes': per}, open(tmp, 'w'), ensure_ascii=False, separators=(',', ':'))
