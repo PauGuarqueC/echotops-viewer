@@ -1,1 +1,1 @@
-{"model":"arome","nom":"AROME","run_utc":"2026-10-08T21:00:00Z","pas_h":1,"passos":25,"bounds":[[39.6,-1.4],[43.4,4.2]],"w":224,"h":203,"cols":7,"escala":0.01,"nodata":65535,"fitxer":"precip_h.png","resolucio_km":2.5}
+{"model":"arome","nom":"AROME","run_utc":"2026-10-09T00:00:00Z","pas_h":1,"passos":49,"bounds":[[39.6,-1.4],[43.4,4.2]],"w":224,"h":203,"cols":7,"escala":0.01,"nodata":65535,"fitxer":"precip_h.png","resolucio_km":2.5}
