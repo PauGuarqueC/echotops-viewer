@@ -6,7 +6,7 @@
     mov: null, movActiu: false, movCapa: L.layerGroup() };
   const refl = { overlay: null, actiu: false, mode: 'echo' };
   const capaM = m => CAPA_MODES[m] || ((typeof m === 'string' && m.indexOf('mod:') === 0) ? [false, false] : null);
-  const CAPA_MODES = { 'echo': [false, false], 'refl': [true, false], 'sat': [false, true], 'echo+sat': [false, true], 'refl+sat': [true, true], 'radfr': [false, false] };
+  const CAPA_MODES = { 'echo': [false, false], 'refl': [true, false], 'sat': [false, true], 'echo+sat': [false, true], 'refl+sat': [true, true], 'radfr': [false, false], 'radfz': [false, false], 'radfh': [false, false] };
   const mod = { models: {}, sel: null, t: null, acum: 0, overlay: null, cur: null, cache: {}, token: 0, pendent: null, cs: null, aplica: null };
   const sat = { actiu: false, op: 65, capa: null, time: null, errs: 0 };
   const REFL_LLEGENDA = [['rgb(150,215,255)', '15'], ['rgb(70,160,255)', '20'], ['rgb(0,190,220)', '25'], ['rgb(0,190,80)', '30'],
@@ -322,7 +322,7 @@
       div.innerHTML = `<div class="nowc-cap"><span>Capes</span><span class="nowc-fl">▾</span></div><div class="nowc-body">
         <select id="capa-sel" style="display:none;">
           <option value="echo">Echotops (Meteocat)</option>
-          <option value="refl">Reflectivitat radar (AEMET)</option><option value="radfr">Radar França (lame d'eau)</option>
+          <option value="refl">Reflectivitat radar (AEMET)</option><option value="radfr">Radar França (lame d'eau)</option><option value="radfz">Radar França (reflectivitat)</option><option value="radfh">Radar França (alçada de la mesura)</option>
           <option value="sat">Satèl·lit IR 10,5 µm (MTG)</option>
           <option value="echo+sat">Echotops + satèl·lit</option>
           <option value="refl+sat">Reflectivitat + satèl·lit</option>
@@ -398,7 +398,7 @@
 
   // ---- Selector de fons: dos botons (Observació / Predicció) a dalt a l'esquerra. El <select id="capa-sel"> (ocult) continua sent la font de veritat ----
   (function(){
-    const OBS = [['echo', 'Echotops (Meteocat)'], ['refl', 'Reflectivitat radar (AEMET)'], ['radfr', 'Radar França (lame d\'eau, Météo-France)'], ['sat', 'Satèl·lit IR 10,5 µm (MTG)'], ['echo+sat', 'Echotops + satèl·lit'], ['refl+sat', 'Reflectivitat + satèl·lit']];
+    const OBS = [['echo', 'Echotops (Meteocat)'], ['refl', 'Reflectivitat radar (AEMET)'], ['radfr', 'Radar França (lame d\'eau, Météo-France)'], ['radfz', 'Radar França (reflectivitat, Météo-France)'], ['radfh', 'Radar França (alçada de la mesura)'], ['sat', 'Satèl·lit IR 10,5 µm (MTG)'], ['echo+sat', 'Echotops + satèl·lit'], ['refl+sat', 'Reflectivitat + satèl·lit']];
     const st = document.createElement('style');
     st.textContent = `
       #timeline-wrap{ padding:6px 12px 8px !important; }
@@ -712,7 +712,7 @@
   // ---- Llegenda compartida: el mateix quadre (posició i lectura al passar el ratolí) que echotops ----
     const LX_SAT_LEG = () => `${SAT.url}?service=WMS&request=GetLegendGraphic&version=1.3.0&format=image/png&layer=${encodeURIComponent(SAT.capa)}&style=${encodeURIComponent(SAT.estil)}`;
   const LX_TXT0 = 'Passa el cursor pel mapa';
-  function legendaMode(){ return mod.sel ? 'mod' : (refl.mode === 'radfr' ? 'radfr' : (refl.actiu ? 'refl' : (refl.mode === 'sat' ? 'sat' : 'echo'))); }
+  function legendaMode(){ return mod.sel ? 'mod' : (/^radf[rzh]$/.test(refl.mode) ? refl.mode : (refl.actiu ? 'refl' : (refl.mode === 'sat' ? 'sat' : 'echo'))); }
   function legendaX(){
     const lg = document.getElementById('legend'); if (!lg) return;
     let x = document.getElementById('legend-x');
@@ -742,6 +742,15 @@
       b.innerHTML = lab(0) + '<div class="bands" style="margin:1px 0;box-shadow:0 0 0 1px rgba(0,0,0,.25)">' + [MOD_ZERO].concat(P.map(q => q[1])).map(col => `<span style="background:${col}"></span>`).join('') + '</div>' + lab(1);
       c.textContent = 'Model: ' + (M.nom || '') + (M.model === 'arome' ? ' (Météo-France)' : ' (SMC)');
       if (h) h.style.display = '';
+    }else if (m === 'radfz' || m === 'radfh'){
+      const Z = m === 'radfz', PH = radfhPal();
+      const P = Z ? REFL_LLEGENDA.map(q => [q[1], q[0]]) : PH.lim.map((v, i) => [v, PH.col[i + 1]]);
+      const primer = Z ? MOD_ZERO : PH.col[0];
+      t.innerHTML = Z ? 'Radar França · reflectivitat <span style="text-transform:none">(dBZ)</span>' : 'Radar França · alçada de la mesura <span style="text-transform:none">(km sobre el mar)</span>';
+      lg.style.width = '360px';
+      const nb = P.length + 1, lab = (par) => '<div class="band-labels" style="height:12px;margin:0">' + P.map(([v], i) => i % 2 === par ? `<span style="left:${((i + 1) / nb * 100).toFixed(2)}%">${v}</span>` : '').join('') + '</div>';
+      b.innerHTML = lab(0) + '<div class="bands" style="margin:1px 0;box-shadow:0 0 0 1px rgba(0,0,0,.25)">' + [primer].concat(P.map(q => q[1])).map(col => `<span style="background:${col}"></span>`).join('') + '</div>' + lab(1);
+      c.textContent = Z ? 'Radar: Météo-France (Llicència Oberta 2.0) · mosaic de 1 km, només ≥ 15 dBZ' : 'Alçada de la mesura radar retinguda a cada píxel (només on hi ha eco)';
     }else if (m === 'radfr'){
       const P = MOD_PAL_H;
       t.innerHTML = 'Radar França · lame d\'eau <span style="text-transform:none">(mm/h)</span>';
@@ -790,7 +799,7 @@
   });
   map.on('mouseout', () => { const el = document.getElementById('lx-hover'); if (el) el.textContent = LX_TXT0; });
   function reflExcl(){
-    const on = !!refl.overlay || refl.mode === 'sat' || refl.mode === 'radfr' || mod.sel;
+    const on = !!refl.overlay || refl.mode === 'sat' || /^radf[rzh]$/.test(refl.mode) || mod.sel;
     if (typeof currentOverlay !== 'undefined' && currentOverlay) currentOverlay.setOpacity(on ? 0 : 0.85);
     legendaX();
   }
@@ -823,18 +832,20 @@
   }
 
     // ---- Radar de Météo-France (lame d'eau 500 m): mode del selector d'Observacions ----
-  var radfr = { meta: null, ov: null, ult: 0, carr: false };
+    function radfhPal(){ return { col: ['rgb(68,1,84)', 'rgb(65,68,135)', 'rgb(42,120,142)', 'rgb(34,168,132)', 'rgb(122,209,81)', 'rgb(253,231,37)', 'rgb(255,150,0)', 'rgb(240,40,20)'], lim: ['1', '2', '3', '4', '5', '6', '8'] }; }
+  var radfr = { meta: null, metaZ: null, ov: null, ult: 0, carr: false };
   async function radfrCarrega(){
     if (radfr.carr) return; radfr.carr = true;
     try{ const r = await fetch('data/radar_fr/meta.json?_=' + Date.now()); if (r.ok) radfr.meta = await r.json(); }catch(_){}
+    try{ const r = await fetch('data/radar_fr/refl_meta.json?_=' + Date.now()); if (r.ok) radfr.metaZ = await r.json(); }catch(_){}
     radfr.ult = Date.now(); radfr.carr = false;
   }
   function radfrMostra(){
     if (radfr.ov){ map.removeLayer(radfr.ov); radfr.ov = null; }
-    if (refl.mode !== 'radfr') return;
+    if (!/^radf[rzh]$/.test(refl.mode)) return;
     const info = document.getElementById('refl-info'), diu = t => { if (info) info.textContent = t; };
-    if (!radfr.meta || Date.now() - radfr.ult > 120000) radfrCarrega().then(() => { if (refl.mode === 'radfr') reflMostra(); });
-    const M = radfr.meta;
+    if (!radfr.meta || Date.now() - radfr.ult > 120000) radfrCarrega().then(() => { if (/^radf[rzh]$/.test(refl.mode)) reflMostra(); });
+    const M = refl.mode === 'radfr' ? radfr.meta : radfr.metaZ;
     if (!M){ diu('Carregant el radar de França…'); return; }
     const fr = M.frames || [];
     if (!fr.length){ diu('Sense imatges del radar de França'); return; }
@@ -843,12 +854,12 @@
     fr.forEach(f => { const d = Math.abs(Date.parse(f.t) - objectiu); if (d < bd){ bd = d; best = f; } });
     if (!best || bd > 8 * 60000){ diu('Sense imatge del radar de França per a aquest instant'); return; }
     diu('Radar de França de les ' + nowcHoraLocal(Date.parse(best.t)));
-    const ov = L.imageOverlay('data/radar_fr/' + best.f, M.bounds, { opacity: 0.75, interactive: false });
+    const ov = L.imageOverlay('data/radar_fr/' + (refl.mode === 'radfh' ? best.f.replace('rf_', 'rh_') : best.f), M.bounds, { opacity: 0.75, interactive: false });
     ov.on('error', () => { if (radfr.ov === ov){ map.removeLayer(ov); radfr.ov = null; diu('Falta la imatge del radar de França de les ' + nowcHoraLocal(Date.parse(best.t))); } });
     radfr.ov = ov.addTo(map); ov.bringToBack();
   }
   { const reflMostra0 = reflMostra; reflMostra = function(){ reflMostra0(); try{ radfrMostra(); }catch(e){ console.warn('radar FR', e); } }; }
-  if (refl.mode === 'radfr') reflMostra();
+  if (/^radf[rzh]$/.test(refl.mode)) reflMostra();
 
 async function nowcActiva(on){
     nowc.actiu = on;
@@ -1417,7 +1428,13 @@ async function nowcActiva(on){
       const blocs = [];
       if (echoOn) blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, 'ALÇADA ECHO TOP (KM)', EXP_ECHO_COLS, EXP_ECHO_LBL, 'frontera') });
       if (reflOn) blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, 'REFLECTIVITAT RADAR (dBZ)', REFL_LLEGENDA.map(q => q[0]), REFL_LLEGENDA.map((q, i) => i % 2 === 0 ? q[1] + (i === REFL_LLEGENDA.length - 1 ? '+' : '') : ''), 'centre') });
-      if (radfrOn) blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, 'RADAR FRANÇA · LAME D\'EAU (mm/h)', [MOD_ZERO].concat(MOD_PAL_H.map(q => q[1])), MOD_PAL_H.map(q => String(q[0])), 'alterna') });
+      if (radfrOn){
+        const zm = refl.mode === 'radfz', hm = refl.mode === 'radfh';
+        const cols = zm ? [MOD_ZERO].concat(REFL_LLEGENDA.map(q => q[0])) : hm ? radfhPal().col : [MOD_ZERO].concat(MOD_PAL_H.map(q => q[1]));
+        const labs = zm ? REFL_LLEGENDA.map(q => q[1]) : hm ? radfhPal().lim : MOD_PAL_H.map(q => String(q[0]));
+        const tit = zm ? 'RADAR FRANÇA · REFLECTIVITAT (dBZ)' : hm ? 'RADAR FRANÇA · ALÇADA DE LA MESURA (km)' : 'RADAR FRANÇA · LAME D\'EAU (mm/h)';
+        blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, tit, cols, labs, 'alterna') });
+      }
       if (satOn){
         const li = await expImg(`${SAT.url}?service=WMS&request=GetLegendGraphic&version=1.3.0&format=image/png&layer=${encodeURIComponent(SAT.capa)}&style=${encodeURIComponent(SAT.estil)}`);
         blocs.push({ w: 3, f: (x, y, w) => {
