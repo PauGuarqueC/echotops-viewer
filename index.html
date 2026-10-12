@@ -882,6 +882,22 @@ function initMap(){
       L.DomEvent.disableScrollPropagation(div);
       div.querySelector('#nowc-toggle').addEventListener('change', e => nowcActiva(e.target.checked));
       const cs = div.querySelector('#capa-sel'), so_ = div.querySelector('#sat-op');
+      // Superposicions plegable (l'estat es recorda)
+      try{
+        const stp = document.createElement('style');
+        stp.textContent = '.nowc-sec.sup-cap{cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center}.nowc-sec.sup-cap.plegat ~ *{display:none !important}';
+        document.head.appendChild(stp);
+        const H = [...div.querySelectorAll('.nowc-sec')].find(e => /^Superposicions/.test(e.textContent.trim()));
+        if (H){
+          H.classList.add('sup-cap');
+          H.innerHTML = '<span>Superposicions</span><span class="nowc-fl">▾</span>';
+          const fl = H.querySelector('.nowc-fl');
+          const aplicaSup = pl => { H.classList.toggle('plegat', pl); fl.textContent = pl ? '▸' : '▾'; try{ localStorage.setItem('nowc_sup_plegat', pl ? '1' : '0'); }catch(_){} };
+          let pl0 = false; try{ pl0 = localStorage.getItem('nowc_sup_plegat') === '1'; }catch(_){}
+          aplicaSup(pl0);
+          H.addEventListener('click', () => aplicaSup(!H.classList.contains('plegat')));
+        }
+      }catch(e){ console.warn('Superposicions plegable', e); }
       try{ const m = localStorage.getItem(NOWC_LS_CAPA); if (m && CAPA_MODES[m]) refl.mode = m; else if (m && m.indexOf('mod:') === 0) mod.pendent = m; }catch(_){}
       try{ const o = +(JSON.parse(localStorage.getItem(NOWC_LS_SAT) || '{}').op); if (o >= 20 && o <= 100) sat.op = o; }catch(_){}
       cs.value = refl.mode; so_.value = sat.op;
@@ -981,6 +997,21 @@ function initMap(){
     document.addEventListener('click', e => { if (obert && !d.contains(e.target)) tanca(); });
     cs.addEventListener('change', sync);
     window.fonsSync = sync;
+    // Informació del radar/model/satèl·lit (i el control de temps de la previsió): enganxada als botons Observació/Predicció
+    try{
+      const inf = document.createElement('div'); inf.className = 'fons-info';
+      const st2 = document.createElement('style');
+      st2.textContent = '.fons-ctl .fons-info{border-top:1px solid var(--panel-border,#ccc);padding:7px 14px 8px;min-width:270px;max-width:360px;font-size:11px;line-height:1.4}.fons-ctl .fons-info > *{margin-top:0 !important}.fons-ctl .fons-info > * + *{margin-top:5px !important}';
+      document.head.appendChild(st2);
+      ['refl-info', 'mod-ctl', 'sat-ctl'].forEach(id => { const e = document.getElementById(id); if (e) inf.appendChild(e); });
+      d.appendChild(inf);
+      const veu = () => {
+        const hi = [...inf.children].some(e => e.style.display !== 'none' && (e.id !== 'refl-info' || e.textContent.trim() !== ''));
+        const v = hi ? '' : 'none'; if (inf.style.display !== v) inf.style.display = v;
+      };
+      new MutationObserver(veu).observe(inf, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style'] });
+      veu();
+    }catch(e){ console.warn('Informació sota Observació/Predicció', e); }
     sync();
   })();
 
@@ -1350,6 +1381,12 @@ function initMap(){
     try{ const r = await fetch('data/radar_fr/refl_meta.json?_=' + Date.now()); if (r.ok) radfr.metaZ = await r.json(); }catch(_){}
     radfr.ult = Date.now(); radfr.carr = false;
   }
+  window.radfrFrames = function(){
+    if (!/^radf[rzh]$/.test(refl.mode)) return null;
+    const M = refl.mode === 'radfr' ? radfr.meta : radfr.metaZ;
+    if (!M || !M.frames) return null;
+    return M.frames.map(f => Date.parse(f.t)).filter(x => !isNaN(x)).sort((a, b) => a - b);
+  };
   function radfrMostra(){
     if (radfr.ov){ map.removeLayer(radfr.ov); radfr.ov = null; }
     if (!/^radf[rzh]$/.test(refl.mode)) return;
@@ -1359,7 +1396,7 @@ function initMap(){
     if (!M){ diu('Carregant el radar de França…'); return; }
     const fr = M.frames || [];
     if (!fr.length){ diu('Sense imatges del radar de França'); return; }
-    const objectiu = nowc.ts ? nowcMs(nowc.ts.replace('_', '')) : Date.parse(fr[fr.length - 1].t);
+    const objectiu = (window.radfrT != null && !(Date.now() < (window.expFins || 0))) ? window.radfrT : (nowc.ts ? nowcMs(nowc.ts.replace('_', '')) : Date.parse(fr[fr.length - 1].t));
     let best = null, bd = 1e18;
     fr.forEach(f => { const d = Math.abs(Date.parse(f.t) - objectiu); if (d < bd){ bd = d; best = f; } });
     if (!best || bd > 8 * 60000){ diu('Sense imatge del radar de França per a aquest instant'); return; }
@@ -1700,6 +1737,7 @@ async function nowcActiva(on){
   })();
 
   function expTs(){
+    if (window.radfrT != null && !(Date.now() < (window.expFins || 0))){ const k = nowcClau(window.radfrT); return k.slice(0, 8) + '_' + k.slice(8); }
     if (typeof currentTs !== 'undefined' && currentTs) return currentTs;
     if (nowc.ts) return nowc.ts;
     const f = nowc.hist && nowc.hist.final_utc; if (!f) return null;
@@ -2404,6 +2442,17 @@ async function nowcActiva(on){
       obsOcult = on;
     }
     function aplica(force){
+      let fr = null;
+      if (modeT === 'obs'){ const F = window.radfrFrames ? window.radfrFrames() : null; if (F && F.length) fr = F; }
+      const antT = window.radfrT, tsAnt = currentTs;
+      if (fr){
+        const snap = x => { let b = x, bd = 8 * 60000 + 1; fr.forEach(f => { const d = Math.abs(f - x); if (d < bd){ bd = d; b = f; } }); return b; };
+        window.radfrT = Tsel !== null ? snap(Tsel) : fr[fr.length - 1];
+      } else window.radfrT = null;
+      aplicaBase(force);                                   // Echotops, AEMET, satèl·lit...: el seu fotograma més proper, sense bloquejar el radar de França
+      if (fr){ if (currentTs === tsAnt && window.radfrT !== antT){ try{ reflMostra(); }catch(_){} } escriuHora(window.radfrT); }
+    }
+    function aplicaBase(force){
       const m = modSel();
       if (modeT === 'prev'){
         const T = Tsel !== null ? Tsel : nowRef;
@@ -2456,7 +2505,9 @@ async function nowcActiva(on){
           T = (Tsel !== null ? Tsel : nowRef) + 3600000;
           Tsel = T > nowRef + N * Q ? null : T;
         } else {
-          if (alFinal){ T = nowRef - N * Q; }
+          const FRp = window.radfrFrames ? window.radfrFrames() : null;
+          if (FRp && FRp.length){ if (alFinal) T = FRp[0]; else { const nx = FRp.find(x => x > Tsel + 1000); T = nx === undefined ? nowRef : nx; } }
+          else if (alFinal){ T = nowRef - N * Q; }
           else { T = Tsel + 1800000; }
           Tsel = T >= nowRef ? null : T;
         }
@@ -2497,6 +2548,11 @@ async function nowcActiva(on){
         const cs0 = capaSel(); if (cs0 && cs0.value){ if (cs0.value.indexOf('mod:') === 0) ultPrev = cs0.value; else ultObs = cs0.value; }
         const hasMod = !!modSel();
         if (hasMod !== modAnt){ modAnt = hasMod; setMode(hasMod ? 'prev' : 'obs'); }
+        if (modeT === 'obs'){
+          const F = window.radfrFrames ? window.radfrFrames() : null, act = !!(F && F.length);
+          if (act !== (window.radfrT != null) || (act && Tsel === null && window.radfrT !== F[F.length - 1])) aplica(true);
+          else if (act) escriuHora(window.radfrT);
+        }
         window.tlT = tlTval();
         if (modeT === 'prev'){                                          // re-afirma l'estat de previsio si una actualitzacio del manifest el trenca
           ocultaObs(true); escriuHora(Tsel !== null ? Tsel : nowRef);
@@ -2505,7 +2561,7 @@ async function nowcActiva(on){
         if (!dragging){
           let Tc;
           if (modeT === 'prev') Tc = Tsel !== null ? Tsel : nowRef;
-          else Tc = Tsel !== null ? Tsel : (currentTs ? tsToDate(currentTs).getTime() : nowRef);
+          else Tc = Tsel !== null ? Tsel : (window.radfrT != null ? window.radfrT : (currentTs ? tsToDate(currentTs).getTime() : nowRef));
           const v = modeT === 'prev' ? Math.max(0, Math.min(N, Math.round((Tc - nowRef) / Q))) : Math.max(-N, Math.min(0, Math.round((Tc - nowRef) / Q)));
           if (+sl.value !== v) sl.value = v;
         }
