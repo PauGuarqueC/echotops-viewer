@@ -1406,7 +1406,7 @@ function initMap(){
     radfr.ov = ov.addTo(map); ov.bringToBack();
   }
   { const reflMostra0 = reflMostra; reflMostra = function(){ reflMostra0(); try{ radfrMostra(); }catch(e){ console.warn('radar FR', e); } }; }
-  if (/^radf[rzh]$/.test(refl.mode)) reflMostra();
+  setTimeout(() => { try{ if (/^radf[rzh]$/.test(refl.mode)) reflMostra(); }catch(e){ console.warn('radar FR (inici)', e); } }, 0);
 
 async function nowcActiva(on){
     nowc.actiu = on;
