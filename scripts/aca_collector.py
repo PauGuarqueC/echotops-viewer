@@ -39,7 +39,7 @@ def num(v):
 
 
 def cataleg(sortida, forca=False):
-    """Catàleg compacte; es refresca un cop al dia."""
+    """Catàleg compacte; es refresca un cop (són fixos; es refresquen amb --forca-cataleg)."""
     f = sortida / "estacions.json"
     if f.exists() and not forca and time.time() - f.stat().st_mtime < 24 * 3600:
         return json.loads(f.read_text())
@@ -69,10 +69,10 @@ def cataleg(sortida, forca=False):
 
 
 def llindars(sortida, forca=False):
-    """Llindars de cabal dels aforaments (els mateixos que mostra el visor públic de l'ACA): un cop al dia.
+    """Llindars de cabal dels aforaments (els mateixos que mostra el visor públic de l'ACA): un cop (són fixos; es refresquen amb --forca-cataleg).
     data/aca/llindars.json: {estacions: {codi: {"q": [activació, moderat, alt, molt alt, excepcional, excepcional-2] (m³/s), "sq": sensor de cabal, "sh": sensor de nivell}}}"""
     f = sortida / "llindars.json"
-    if f.exists() and not forca and time.time() - f.stat().st_mtime < 24 * 3600:
+    if f.exists() and not forca:                              # són fixos: només es baixen si falta el fitxer (o amb --forca-cataleg)
         return
     try:
         r = S.get("https://aplicacions.aca.gencat.cat/aetr/vishid/v2/catalog/public/rivergauges", params={"thresholds": "true"}, timeout=90)
