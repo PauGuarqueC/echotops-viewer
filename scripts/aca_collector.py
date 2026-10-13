@@ -68,6 +68,33 @@ def cataleg(sortida, forca=False):
     return cat
 
 
+def llindars(sortida, forca=False):
+    """Llindars de cabal dels aforaments (els mateixos que mostra el visor públic de l'ACA): un cop al dia.
+    data/aca/llindars.json: {estacions: {codi: {"q": [activació, moderat, alt, molt alt, excepcional, excepcional-2] (m³/s), "sq": sensor de cabal, "sh": sensor de nivell}}}"""
+    f = sortida / "llindars.json"
+    if f.exists() and not forca and time.time() - f.stat().st_mtime < 24 * 3600:
+        return
+    try:
+        r = S.get("https://aplicacions.aca.gencat.cat/aetr/vishid/v2/catalog/public/rivergauges", params={"thresholds": "true"}, timeout=90)
+        j = r.json() if r.status_code == 200 else None
+    except (requests.RequestException, ValueError) as e:
+        print(f"  ACA llindars: {type(e).__name__}", file=sys.stderr); return
+    if not isinstance(j, dict) or not j:
+        print(f"  ACA llindars: resposta inesperada (HTTP {r.status_code})", file=sys.stderr); return
+    est = {}
+    for codi, c in j.items():
+        q = ((c.get("thresholds") or {}).get("river_flow")) or []
+        if len(q) < 2:
+            continue
+        sens = c.get("sensors") or {}
+        sq = next((k for k, v in sens.items() if v.get("type") == "river_flow"), None)
+        sh = next((k for k, v in sens.items() if v.get("type") == "river_level"), None)
+        est[codi] = {"q": q, "sq": sq, "sh": sh, "riu": (c.get("addicionalInfo") or {}).get("Riu"), "conca": (c.get("addicionalInfo") or {}).get("Conca")}
+    if est:
+        f.write_text(json.dumps({"actualitzat": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "estacions": est}, ensure_ascii=False, separators=(",", ":")))
+        print(f"ACA llindars: {len(est)} aforaments amb llindars de cabal")
+
+
 def llegeix_ultimes():
     obs = {}                                                  # sensor -> [(ms, valor_text)]
     for tipus, prov in TIPUS.items():
@@ -139,6 +166,7 @@ def main():
     cat = cataleg(sortida, a.forca_cataleg)
     if not cat.get("estacions"):
         print("ACA: sense catàleg (API no disponible?)"); return 1
+    llindars(sortida, a.forca_cataleg)
 
     if a.backfill:
         ara = datetime.now(timezone.utc); ini = ara - timedelta(hours=a.backfill)

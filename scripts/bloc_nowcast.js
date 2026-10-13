@@ -359,6 +359,10 @@
           <input type="checkbox" id="aca-toggle" checked style="margin-top:2px"> <span>Pluviòmetres ACA</span>
         </label>
         <div id="aca-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
+        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
+          <input type="checkbox" id="afo-toggle" checked style="margin-top:2px"> <span>Aforadors ACA (cabal)</span>
+        </label>
+        <div id="afo-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;">
           <input type="checkbox" id="nowc-so"> <span>So d'avís</span>
           <a href="#" id="nowc-prova" style="margin-left:auto;font-size:11px;">prova</a>
@@ -1772,6 +1776,82 @@ async function nowcActiva(on){
       else { map.removeLayer(grup); clearInterval(timer); if (info) info.textContent = ''; }
     }
     window.acaMostra = t => { ts = t; if (tog && tog.checked) pinta(); };
+    if (tog) { tog.addEventListener('change', () => activa(tog.checked)); activa(tog.checked); }
+  })();
+  // ---- Aforadors ACA (cabal): llindars de data/aca/llindars.json (aca_collector.py), valors de data/aca/ultimes.json ----
+  (function(){
+    const COL = ['#1E88E5', '#2ECC40', '#FFD600', '#FB8C00', '#E53935', '#8E24AA', '#111111'];
+    const NOM = ['Normalitat', 'Activació', 'Moderat', 'Alt', 'Molt alt', 'Excepcional', 'Excepcional (2n llindar)'];
+    const ETQ = ['Act', 'Mod', 'Alt', 'M.Al', 'Exc', 'Exc'];
+    const pane = map.createPane('afoPane'); pane.style.zIndex = 455;
+    const grup = L.layerGroup();
+    const tog = document.getElementById('afo-toggle'), info = document.getElementById('afo-info');
+    const hl = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const f1 = x => (x === null || x === undefined || isNaN(x)) ? '—' : (Math.abs(x) >= 100 ? Math.round(x) : Math.round(x * 100) / 100).toString().replace('.', ',');
+    const nivell = (q, v) => { let n = 0; q.forEach(l => { if (v >= l) n++; }); return n; };
+    let marcs = [], timer = null, CAT = null;
+    function lectura(e, UL){
+      const ul = UL.valors || {}, q = ul[e.sq], h = e.sh ? ul[e.sh] : null;
+      const t = q ? Date.parse(q[0]) : NaN, v = q ? q[1] : null;
+      const vell = isNaN(t) || (Date.now() - t) > 3 * 3600000;
+      return { v: (typeof v === 'number' && !vell) ? v : null, t: t, h: h && typeof h[1] === 'number' ? h[1] : null, vell: vell };
+    }
+    function html(o){
+      const e = o.e, c = o.cur, n = c.v === null ? -1 : nivell(e.q, c.v);
+      return `<div style="font:12px/1.5 var(--font-ui,sans-serif);min-width:200px;">` +
+        `<b>${e.nom || e.id}</b><br><span style="opacity:.7">${[e.riu, e.comarca].filter(Boolean).join(' · ')}</span>` +
+        (n >= 0 ? `<div style="margin:4px 0;padding:2px 6px;background:${COL[n]};color:${n === 2 ? '#222' : '#fff'};display:table;border-radius:2px;font-weight:700;">${NOM[n]}</div>` : '') +
+        `<br>Cabal: <b>${f1(c.v)} m³/s</b>` + (c.h !== null ? ` · Nivell: <b>${f1(c.h)} cm</b>` : '') +
+        `<br><span style="opacity:.7;font-size:11px;">Llindars (m³/s): ` + e.q.map((l, i) => `${ETQ[i]} ${f1(l)}`).join(' · ') + `</span>` +
+        `<br><span style="opacity:.7">${isNaN(c.t) ? 'Sense dada' : (c.vell ? 'Sense dada recent · última: ' : 'Mesura de les ') + hl.format(new Date(c.t)) + ' h'} · ACA</span></div>`;
+    }
+    function pinta(UL){
+      let nact = 0, nsd = 0;
+      marcs.forEach(o => {
+        const { e, m, p } = o;
+        const c = o.cur = lectura(e, UL), n = c.v === null ? -1 : nivell(e.q, c.v);
+        if (n < 0) nsd++;
+        if (n >= 1) nact++;
+        if (n >= 2) {                                      // moderat o superior: etiqueta amb el cabal
+          p.setIcon(L.divIcon({ className: '', iconSize: [0, 0],
+            html: `<div class="aca-pill" style="background:${COL[n]};color:${n === 2 ? '#222' : '#fff'}">${f1(c.v)}<small>m³/s</small></div>` }));
+          p.setZIndexOffset(1000 * n);
+          if (grup.hasLayer(m)) grup.removeLayer(m);
+          if (!grup.hasLayer(p)) grup.addLayer(p);
+        } else {
+          m.setStyle({ fillColor: n < 0 ? '#888888' : COL[n], fillOpacity: n < 0 ? 0.25 : 0.85, opacity: n < 0 ? 0.35 : 0.9 });
+          if (grup.hasLayer(p)) grup.removeLayer(p);
+          if (!grup.hasLayer(m)) grup.addLayer(m);
+        }
+        if (p.isPopupOpen()) p.setPopupContent(html(o));
+        if (m.isPopupOpen()) m.setPopupContent(html(o));
+      });
+      if (info) info.textContent = `${marcs.length} aforadors · ` + (nact ? `${nact} amb cabal en activació o superior` : 'cap supera el llindar d\'activació') +
+        (nsd ? ` · ${nsd} sense dada recent` : '') + ' (últim valor)';
+    }
+    function crea(est, LL){
+      const per = {}; (est.estacions || []).forEach(x => { per[x.id] = x; });
+      Object.keys(LL.estacions || {}).forEach(id => {
+        const x = per[id], l = LL.estacions[id]; if (!x || !l.sq) return;
+        const e = { id: id, nom: x.nom, comarca: x.comarca, lat: x.lat, lon: x.lon, q: l.q, sq: l.sq, sh: l.sh, riu: l.riu };
+        const o = { e: e, cur: { v: null, t: NaN, h: null, vell: true } };
+        o.m = L.circleMarker([e.lat, e.lon], { pane: 'afoPane', radius: 5.5, color: '#fff', weight: 1.2, fillColor: COL[0], fillOpacity: 0.8 });
+        o.m.bindPopup(() => html(o));
+        o.p = L.marker([e.lat, e.lon], { pane: 'afoPane', icon: L.divIcon({ className: '', iconSize: [0, 0], html: '' }) });
+        o.p.bindPopup(() => html(o));
+        marcs.push(o);
+      });
+    }
+    function carrega(){
+      const j = u => fetch(u + '?_=' + Date.now()).then(r => r.ok ? r.json() : Promise.reject(u));
+      Promise.all([CAT ? CAT : Promise.all([j('data/aca/estacions.json'), j('data/aca/llindars.json')]), j('data/aca/ultimes.json')])
+        .then(([cat, UL]) => { if (!CAT){ CAT = cat; crea(cat[0], cat[1]); } pinta(UL); })
+        .catch(() => { if (info) info.textContent = 'Sense dades dels aforadors (falten llindars o valors)'; });
+    }
+    function activa(on){
+      if (on) { grup.addTo(map); carrega(); clearInterval(timer); timer = setInterval(carrega, 5 * 60 * 1000); }
+      else { map.removeLayer(grup); clearInterval(timer); if (info) info.textContent = ''; }
+    }
     if (tog) { tog.addEventListener('change', () => activa(tog.checked)); activa(tog.checked); }
   })();
   // ---- Avisos SMP del Meteocat per comarques (data/smp/avisos.json, generat per smp_collector.py) ----
