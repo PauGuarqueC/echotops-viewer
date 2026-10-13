@@ -1778,38 +1778,104 @@ async function nowcActiva(on){
     window.acaMostra = t => { ts = t; if (tog && tog.checked) pinta(); };
     if (tog) { tog.addEventListener('change', () => activa(tog.checked)); activa(tog.checked); }
   })();
-  // ---- Aforadors ACA (cabal): llindars de data/aca/llindars.json (aca_collector.py), valors de data/aca/ultimes.json ----
+  // ---- Aforadors ACA (cabal) [afo-v2]: llindars fixos (data/aca/llindars.json) + sèries de data/aca/dies_afo/*.json; segueixen la barra de temps ----
   (function(){
     const COL = ['#1E88E5', '#2ECC40', '#FFD600', '#FB8C00', '#E53935', '#8E24AA', '#111111'];
     const NOM = ['Normalitat', 'Activació', 'Moderat', 'Alt', 'Molt alt', 'Excepcional', 'Excepcional (2n llindar)'];
     const ETQ = ['Act', 'Mod', 'Alt', 'M.Al', 'Exc', 'Exc'];
+    const PAS = 300000, MAXEDAT = 36;                      // graella de 5 min; una mesura val fins a 3 h enrere
     const pane = map.createPane('afoPane'); pane.style.zIndex = 455;
     const grup = L.layerGroup();
     const tog = document.getElementById('afo-toggle'), info = document.getElementById('afo-info');
-    const hl = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const fmt = o => new Intl.DateTimeFormat('ca-ES', Object.assign({ timeZone: 'Europe/Madrid', hourCycle: 'h23' }, o));
+    const hl = fmt({ day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }), hh = fmt({ hour: '2-digit', minute: '2-digit' });
     const f1 = x => (x === null || x === undefined || isNaN(x)) ? '—' : (Math.abs(x) >= 100 ? Math.round(x) : Math.round(x * 100) / 100).toString().replace('.', ',');
     const nivell = (q, v) => { let n = 0; q.forEach(l => { if (v >= l) n++; }); return n; };
-    let marcs = [], timer = null, CAT = null;
-    function lectura(e, UL){
-      const ul = UL.valors || {}, q = ul[e.sq], h = e.sh ? ul[e.sh] : null;
-      const t = q ? Date.parse(q[0]) : NaN, v = q ? q[1] : null;
-      const vell = isNaN(t) || (Date.now() - t) > 3 * 3600000;
-      return { v: (typeof v === 'number' && !vell) ? v : null, t: t, h: h && typeof h[1] === 'number' ? h[1] : null, vell: vell };
+    const diaStr = ms => new Date(ms).toISOString().slice(0, 10);
+    let marcs = [], timer = null, CAT = null, UL = null, tsA = null;
+    const DIES = {};                                       // dia -> JSON | 'pend' | null (no existeix)
+    function dia(d){
+      if (!(d in DIES)) {
+        DIES[d] = 'pend';
+        fetch('data/aca/dies_afo/' + d + '.json?_=' + Math.floor(Date.now() / 300000)).then(r => r.ok ? r.json() : null).catch(() => null)
+          .then(j => { DIES[d] = j; refresca(); });
+      }
+      return DIES[d];
+    }
+    const msSel = () => { const ara = Date.now(); if (!tsA) return { ms: ara, viu: true }; const m = nowcMs(tsA.replace('_', '')); return (isNaN(m) || m > ara - 25 * 60000) ? { ms: ara, viu: true } : { ms: m, viu: false }; };
+    function serie(id, clau, ms){                          // darrera mesura <= ms (fins a 3 h enrere): {v, t} | null | 'pend'
+      const k0 = Math.floor(ms / PAS) * PAS;
+      for (let j = 0; j < MAXEDAT; j++) {
+        const t = k0 - j * PAS, d = diaStr(t), J = dia(d);
+        if (J === 'pend') return 'pend';
+        const arr = J && J[clau] && J[clau][id];
+        if (!arr) { if (J) continue; else break; }
+        const v = arr[Math.round((t - Date.parse(d + 'T00:00:00Z')) / PAS)];
+        if (v !== null && v !== undefined) return { v: v, t: t };
+      }
+      return null;
+    }
+    function lectura(e, S){
+      let q = serie(e.id, 'q', S.ms), h = serie(e.id, 'h', S.ms);
+      if (q === 'pend' || h === 'pend') return null;      // dies encara carregant
+      if (!q && S.viu && UL) {                             // si falta el fitxer d'avui, es fa servir l'últim valor del col·lector
+        const u = (UL.valors || {})[e.sq], t = u ? Date.parse(u[0]) : NaN;
+        if (u && typeof u[1] === 'number' && Date.now() - t < 3 * 3600000) q = { v: u[1], t: t };
+        const uh = e.sh ? (UL.valors || {})[e.sh] : null; if (!h && uh && typeof uh[1] === 'number') h = { v: uh[1], t: Date.parse(uh[0]) };
+      }
+      return { v: q ? q.v : null, t: q ? q.t : NaN, h: h ? h.v : null };
     }
     function html(o){
       const e = o.e, c = o.cur, n = c.v === null ? -1 : nivell(e.q, c.v);
-      return `<div style="font:12px/1.5 var(--font-ui,sans-serif);min-width:200px;">` +
+      return `<div style="font:12px/1.5 var(--font-ui,sans-serif);width:300px;">` +
         `<b>${e.nom || e.id}</b><br><span style="opacity:.7">${[e.riu, e.comarca].filter(Boolean).join(' · ')}</span>` +
         (n >= 0 ? `<div style="margin:4px 0;padding:2px 6px;background:${COL[n]};color:${n === 2 ? '#222' : '#fff'};display:table;border-radius:2px;font-weight:700;">${NOM[n]}</div>` : '') +
         `<br>Cabal: <b>${f1(c.v)} m³/s</b>` + (c.h !== null ? ` · Nivell: <b>${f1(c.h)} cm</b>` : '') +
-        `<br><span style="opacity:.7;font-size:11px;">Llindars (m³/s): ` + e.q.map((l, i) => `${ETQ[i]} ${f1(l)}`).join(' · ') + `</span>` +
-        `<br><span style="opacity:.7">${isNaN(c.t) ? 'Sense dada' : (c.vell ? 'Sense dada recent · última: ' : 'Mesura de les ') + hl.format(new Date(c.t)) + ' h'} · ACA</span></div>`;
+        `<br><span style="opacity:.7">${isNaN(c.t) ? 'Sense dada recent' : 'Mesura de les ' + hl.format(new Date(c.t)) + ' h'} · ACA</span>` +
+        `<div style="margin-top:6px;font-size:11px;"><a href="#" class="afo-m" data-m="q" style="font-weight:${o.mode === 'q' ? 700 : 400}">Cabal</a> · <a href="#" class="afo-m" data-m="h" style="font-weight:${o.mode === 'h' ? 700 : 400}">Nivell</a></div>` +
+        `<div style="position:relative;height:150px;margin-top:2px;"><canvas class="afo-cv"></canvas></div>` +
+        `<div style="font-size:10px;opacity:.75;line-height:1.35;">Llindars (m³/s): ` + e.q.map((l, i) => `<span style="color:${COL[i + 1] === '#FFD600' ? '#b59b00' : COL[i + 1]}">■</span> ${ETQ[i]} ${f1(l)}`).join(' · ') + `</div></div>`;
     }
-    function pinta(UL){
-      let nact = 0, nsd = 0;
+    function grafica(o){
+      const pop = (o.m.isPopupOpen() ? o.m : o.p).getPopup(), el = pop && pop.getElement(); if (!el) return;
+      const cv = el.querySelector('canvas.afo-cv'); if (!cv) return;
+      if (o.chart) { try { o.chart.destroy(); } catch (_) {} o.chart = null; }
+      if (typeof Chart === 'undefined') return;
+      const S = msSel(), e = o.e, q = o.mode === 'q';
+      const w1 = S.viu ? S.ms : Math.min(Date.now(), S.ms + 6 * 3600000), w0 = w1 - 48 * 3600000;
+      const pts = []; let pend = false;
+      for (let t = Math.floor(w0 / 86400000) * 86400000; t <= w1; t += 86400000) {
+        const d = diaStr(t), J = dia(d);
+        if (J === 'pend') { pend = true; continue; }
+        const arr = J && J[q ? 'q' : 'h'] && J[q ? 'q' : 'h'][e.id]; if (!arr) continue;
+        arr.forEach((v, i) => { const x = Date.parse(d + 'T00:00:00Z') + i * PAS; if (v !== null && x >= w0 && x <= w1) pts.push({ x: x, y: v }); });
+      }
+      const ys = pts.map(p => p.y), ymx = ys.length ? Math.max.apply(null, ys) : 0, ymn = ys.length ? Math.min.apply(null, ys) : 0;
+      const top = q ? Math.max(ymx * 1.15, e.q[0] * 1.2, 0.1) : Math.max(ymx + 2, ymx * 1.1, 1), bot = q ? 0 : Math.min(0, ymn - 1);
+      const ds = [{ data: pts, borderColor: q ? '#1E88E5' : '#00897B', backgroundColor: q ? 'rgba(30,136,229,.15)' : 'rgba(0,137,123,.15)', fill: true, borderWidth: 1.5, pointRadius: 0, tension: 0 }];
+      if (q) e.q.forEach((l, i) => { if (l <= top) ds.push({ data: [{ x: w0, y: l }, { x: w1, y: l }], borderColor: COL[i + 1], borderWidth: 1, borderDash: [4, 3], pointRadius: 0, fill: false }); });
+      if (!S.viu) ds.push({ data: [{ x: S.ms, y: bot }, { x: S.ms, y: top }], borderColor: '#c00', borderWidth: 1.2, pointRadius: 0, fill: false });
+      o.chart = new Chart(cv, { type: 'line', data: { datasets: ds }, options: {
+        animation: false, responsive: true, maintainAspectRatio: false, parsing: false, normalized: true,
+        scales: { x: { type: 'linear', min: w0, max: w1, ticks: { maxTicksLimit: 5, font: { size: 9 }, callback: v => hl.format(new Date(v)).replace(',', '') } },
+                  y: { min: bot, max: top, ticks: { font: { size: 9 }, maxTicksLimit: 5 }, title: { display: true, text: q ? 'm³/s' : 'cm', font: { size: 9 } } } },
+        plugins: { legend: { display: false }, tooltip: { filter: i => i.datasetIndex === 0, callbacks: { title: it => hl.format(new Date(it[0].parsed.x)) + ' h', label: i => f1(i.parsed.y) + (q ? ' m³/s' : ' cm') } } } } });
+      if (pend || !pts.length) { const nt = document.createElement('div'); nt.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;opacity:.7;pointer-events:none;'; nt.textContent = pend ? 'Carregant…' : 'Sense dades en aquest període'; cv.parentNode.appendChild(nt); }
+    }
+    function actualitzaPopup(o, forca){
+      const open = o.m.isPopupOpen() ? o.m : (o.p.isPopupOpen() ? o.p : null); if (!open) return;
+      const k = [o.cur.v, o.cur.t, o.cur.h, o.mode, Object.keys(DIES).filter(d => DIES[d] && DIES[d] !== 'pend').length, msSel().viu ? 'v' : msSel().ms].join('|');
+      if (!forca && k === o.key) return;
+      o.key = k; open.setPopupContent(html(o)); grafica(o);
+    }
+    function refresca(){
+      if (!CAT || !tog || !tog.checked) return;
+      const S = msSel(); let nact = 0, nsd = 0, pen = false;
       marcs.forEach(o => {
-        const { e, m, p } = o;
-        const c = o.cur = lectura(e, UL), n = c.v === null ? -1 : nivell(e.q, c.v);
+        const c = lectura(o.e, S);
+        if (c === null) { pen = true; return; }
+        o.cur = c;
+        const { e, m, p } = o, n = c.v === null ? -1 : nivell(e.q, c.v);
         if (n < 0) nsd++;
         if (n >= 1) nact++;
         if (n >= 2) {                                      // moderat o superior: etiqueta amb el cabal
@@ -1823,35 +1889,48 @@ async function nowcActiva(on){
           if (grup.hasLayer(p)) grup.removeLayer(p);
           if (!grup.hasLayer(m)) grup.addLayer(m);
         }
-        if (p.isPopupOpen()) p.setPopupContent(html(o));
-        if (m.isPopupOpen()) m.setPopupContent(html(o));
+        actualitzaPopup(o, false);
       });
-      if (info) info.textContent = `${marcs.length} aforadors · ` + (nact ? `${nact} amb cabal en activació o superior` : 'cap supera el llindar d\'activació') +
-        (nsd ? ` · ${nsd} sense dada recent` : '') + ' (últim valor)';
+      if (info) info.textContent = pen ? "Carregant l'arxiu dels aforadors..." : `${marcs.length} aforadors · ` + (nact ? `${nact} amb cabal en activació o superior` : "cap supera el llindar d'activació") +
+        (nsd ? ` · ${nsd} sense dada` : '') + (S.viu ? ' (últim valor)' : ' · ' + hh.format(new Date(S.ms)) + ' h');
     }
     function crea(est, LL){
       const per = {}; (est.estacions || []).forEach(x => { per[x.id] = x; });
       Object.keys(LL.estacions || {}).forEach(id => {
         const x = per[id], l = LL.estacions[id]; if (!x || !l.sq) return;
         const e = { id: id, nom: x.nom, comarca: x.comarca, lat: x.lat, lon: x.lon, q: l.q, sq: l.sq, sh: l.sh, riu: l.riu };
-        const o = { e: e, cur: { v: null, t: NaN, h: null, vell: true } };
+        const o = { e: e, cur: { v: null, t: NaN, h: null }, mode: 'q', key: '' };
+        const op = { minWidth: 316, maxWidth: 330 };
         o.m = L.circleMarker([e.lat, e.lon], { pane: 'afoPane', radius: 5.5, color: '#fff', weight: 1.2, fillColor: COL[0], fillOpacity: 0.8 });
-        o.m.bindPopup(() => html(o));
+        o.m.bindPopup(() => html(o), op);
         o.p = L.marker([e.lat, e.lon], { pane: 'afoPane', icon: L.divIcon({ className: '', iconSize: [0, 0], html: '' }) });
-        o.p.bindPopup(() => html(o));
+        o.p.bindPopup(() => html(o), op);
         marcs.push(o);
       });
     }
+    map.on('popupopen', ev => {
+      const o = marcs.find(x => x.m.getPopup() === ev.popup || x.p.getPopup() === ev.popup); if (!o) return;
+      o.key = '';
+      setTimeout(() => {
+        const el = ev.popup.getElement(); if (!el) return;
+        el.querySelectorAll('a.afo-m').forEach(a => a.addEventListener('click', evt => { evt.preventDefault(); evt.stopPropagation(); o.mode = a.getAttribute('data-m'); actualitzaPopup(o, true); }));
+        grafica(o);
+      }, 0);
+    });
+    map.on('popupclose', ev => { const o = marcs.find(x => x.m.getPopup() === ev.popup || x.p.getPopup() === ev.popup); if (o && o.chart) { try { o.chart.destroy(); } catch (_) {} o.chart = null; } });
     function carrega(){
       const j = u => fetch(u + '?_=' + Date.now()).then(r => r.ok ? r.json() : Promise.reject(u));
-      Promise.all([CAT ? CAT : Promise.all([j('data/aca/estacions.json'), j('data/aca/llindars.json')]), j('data/aca/ultimes.json')])
-        .then(([cat, UL]) => { if (!CAT){ CAT = cat; crea(cat[0], cat[1]); } pinta(UL); })
-        .catch(() => { if (info) info.textContent = 'Sense dades dels aforadors (falten llindars o valors)'; });
+      const avui = Date.now();
+      [diaStr(avui), diaStr(avui - 86400000)].forEach(d => { if (DIES[d] !== 'pend') delete DIES[d]; });   // avui i ahir es tornen a baixar
+      Promise.all([CAT ? CAT : Promise.all([j('data/aca/estacions.json'), j('data/aca/llindars.json')]), j('data/aca/ultimes.json').catch(() => null)])
+        .then(([cat, ul]) => { UL = ul; if (!CAT) { CAT = cat; crea(cat[0], cat[1]); } refresca(); })
+        .catch(() => { if (info) info.textContent = 'Sense dades dels aforadors (falten llindars)'; });
     }
     function activa(on){
       if (on) { grup.addTo(map); carrega(); clearInterval(timer); timer = setInterval(carrega, 5 * 60 * 1000); }
       else { map.removeLayer(grup); clearInterval(timer); if (info) info.textContent = ''; }
     }
+    { const prev = window.acaMostra; window.acaMostra = t => { if (prev) prev(t); tsA = t; refresca(); }; }
     if (tog) { tog.addEventListener('change', () => activa(tog.checked)); activa(tog.checked); }
   })();
   // ---- Avisos SMP del Meteocat per comarques (data/smp/avisos.json, generat per smp_collector.py) ----
