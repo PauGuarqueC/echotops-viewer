@@ -844,7 +844,7 @@
     if (radfr.ov){ map.removeLayer(radfr.ov); radfr.ov = null; }
     if (!/^radf[rzh]$/.test(refl.mode)) return;
     const info = document.getElementById('refl-info'), diu = t => { if (info) info.textContent = t; };
-    if (!radfr.meta || Date.now() - radfr.ult > 120000) radfrCarrega().then(() => { if (/^radf[rzh]$/.test(refl.mode)) reflMostra(); });
+    if (!radfr.carr && Date.now() - radfr.ult > (radfr.meta ? 120000 : 15000)) radfrCarrega().then(() => { if (/^radf[rzh]$/.test(refl.mode)) reflMostra(); });
     const M = refl.mode === 'radfr' ? radfr.meta : radfr.metaZ;
     if (!M){ diu('Carregant el radar de França…'); return; }
     const fr = M.frames || [];
