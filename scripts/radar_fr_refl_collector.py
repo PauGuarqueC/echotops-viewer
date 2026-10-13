@@ -21,8 +21,10 @@ PX = 700.0                                  # metres per píxel (Mercator)
 LIMITS = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65]
 COLORS = [(150, 215, 255), (70, 160, 255), (0, 190, 220), (0, 190, 80), (170, 215, 0), (255, 235, 0),
           (255, 150, 0), (240, 40, 20), (170, 0, 30), (210, 0, 170), (150, 60, 220)]
-ALT_LIM = [0, 1000, 2000, 3000, 4000, 5000, 6000, 8000]      # m: alçada de la mesura (límits inferiors)
-ALT_COL = [(68, 1, 84), (65, 68, 135), (42, 120, 142), (34, 168, 132), (122, 209, 81), (253, 231, 37), (255, 150, 0), (240, 40, 20)]
+ALFA_Z = [150, 190, 205, 215, 225, 230, 235, 240, 245, 250, 255]   # opacitat per classe (mateixa rampa que AEMET/SMC)
+ALT_LIM = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 10000, 12000, 14000, 16000, 20000]   # m (paleta Echotops/SMC)
+ALT_COL = [(0, 0, 179), (0, 51, 255), (0, 128, 255), (0, 204, 255), (0, 255, 255), (76, 115, 0), (128, 179, 0),
+           (0, 204, 0), (255, 255, 0), (255, 165, 0), (255, 127, 0), (255, 0, 0), (255, 0, 255), (128, 0, 128)]
 ALFA = 200                                  # opacitat dels píxels (0-255); el visor hi afegeix la seva
 PROJ = "+proj=stere +lat_0=90 +lon_0=0 +lat_ts=45 +ellps=WGS84 +datum=WGS84"
 UL_LON, UL_LAT, DX = -9.965, 53.67, 1000.0  # cantonada superior esquerra de la mosaic, 1 km
@@ -71,7 +73,7 @@ def pinta(z, i, j, forma):
     rgba = np.zeros(forma + (4,), np.uint8)
     for k, c in enumerate(COLORS):
         m = cl == k if k < len(COLORS) - 1 else cl >= k
-        rgba[m] = (*c, ALFA)
+        rgba[m] = (*c, ALFA_Z[k])
     rgba[~np.isfinite(v)] = 0
     return Image.fromarray(rgba, "RGBA"), v
 
