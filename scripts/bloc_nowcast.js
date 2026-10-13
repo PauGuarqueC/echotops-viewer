@@ -1793,6 +1793,7 @@ async function nowcActiva(on){
     const nivell = (q, v) => { let n = 0; q.forEach(l => { if (v >= l) n++; }); return n; };
     const diaStr = ms => new Date(ms).toISOString().slice(0, 10);
     let marcs = [], timer = null, CAT = null, UL = null, tsA = null;
+    let WIN = 48; try { const w = +localStorage.getItem('afo_win'); if (w > 0) WIN = w; } catch (_) {}   // hores que mostra el gràfic
     const DIES = {};                                       // dia -> JSON | 'pend' | null (no existeix)
     function dia(d){
       if (!(d in DIES)) {
@@ -1833,6 +1834,7 @@ async function nowcActiva(on){
         `<br>Cabal: <b>${f1(c.v)} m³/s</b>` + (c.h !== null ? ` · Nivell: <b>${f1(c.h)} cm</b>` : '') +
         `<br><span style="opacity:.7">${isNaN(c.t) ? 'Sense dada recent' : 'Mesura de les ' + hl.format(new Date(c.t)) + ' h'} · ACA</span>` +
         `<div style="margin-top:6px;font-size:11px;"><a href="#" class="afo-m" data-m="q" style="font-weight:${o.mode === 'q' ? 700 : 400}">Cabal</a> · <a href="#" class="afo-m" data-m="h" style="font-weight:${o.mode === 'h' ? 700 : 400}">Nivell</a></div>` +
+        `<div style="font-size:11px;">Període: ` + [[24, '24 h'], [48, '48 h'], [168, '7 d'], [336, '14 d'], [720, '30 d']].map(([h, t]) => `<a href="#" class="afo-w" data-w="${h}" style="font-weight:${WIN === h ? 700 : 400}">${t}</a>`).join(' · ') + `</div>` +
         `<div style="position:relative;height:150px;margin-top:2px;"><canvas class="afo-cv"></canvas></div>` +
         `<div style="font-size:10px;opacity:.75;line-height:1.35;">Llindars (m³/s): ` + e.q.map((l, i) => `<span style="color:${COL[i + 1] === '#FFD600' ? '#b59b00' : COL[i + 1]}">■</span> ${ETQ[i]} ${f1(l)}`).join(' · ') + `</div></div>`;
     }
@@ -1842,7 +1844,7 @@ async function nowcActiva(on){
       if (o.chart) { try { o.chart.destroy(); } catch (_) {} o.chart = null; }
       if (typeof Chart === 'undefined') return;
       const S = msSel(), e = o.e, q = o.mode === 'q';
-      const w1 = S.viu ? S.ms : Math.min(Date.now(), S.ms + 6 * 3600000), w0 = w1 - 48 * 3600000;
+      const w1 = S.viu ? S.ms : Math.min(Date.now(), S.ms + Math.max(6, WIN / 8) * 3600000), w0 = w1 - WIN * 3600000;
       const pts = []; let pend = false;
       for (let t = Math.floor(w0 / 86400000) * 86400000; t <= w1; t += 86400000) {
         const d = diaStr(t), J = dia(d);
@@ -1864,7 +1866,7 @@ async function nowcActiva(on){
     }
     function actualitzaPopup(o, forca){
       const open = o.m.isPopupOpen() ? o.m : (o.p.isPopupOpen() ? o.p : null); if (!open) return;
-      const k = [o.cur.v, o.cur.t, o.cur.h, o.mode, Object.keys(DIES).filter(d => DIES[d] && DIES[d] !== 'pend').length, msSel().viu ? 'v' : msSel().ms].join('|');
+      const k = [o.cur.v, o.cur.t, o.cur.h, o.mode, WIN, Object.keys(DIES).filter(d => DIES[d] && DIES[d] !== 'pend').length, msSel().viu ? 'v' : msSel().ms].join('|');
       if (!forca && k === o.key) return;
       o.key = k; open.setPopupContent(html(o)); grafica(o);
     }
@@ -1913,7 +1915,17 @@ async function nowcActiva(on){
       o.key = '';
       setTimeout(() => {
         const el = ev.popup.getElement(); if (!el) return;
-        el.querySelectorAll('a.afo-m').forEach(a => a.addEventListener('click', evt => { evt.preventDefault(); evt.stopPropagation(); o.mode = a.getAttribute('data-m'); actualitzaPopup(o, true); }));
+        const cw = el.querySelector('.leaflet-popup-content-wrapper');
+        if (cw && !cw._afo) {                              // delegació: el contingut es refà en canviar de pestanya o de període
+          cw._afo = true;
+          cw.addEventListener('click', evt => {
+            const a = evt.target.closest && evt.target.closest('a.afo-m, a.afo-w'); if (!a) return;
+            evt.preventDefault(); evt.stopPropagation();
+            if (a.classList.contains('afo-m')) o.mode = a.getAttribute('data-m');
+            else { WIN = +a.getAttribute('data-w'); try { localStorage.setItem('afo_win', String(WIN)); } catch (_) {} }
+            actualitzaPopup(o, true);
+          });
+        }
         grafica(o);
       }, 0);
     });
