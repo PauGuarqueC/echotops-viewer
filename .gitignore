@@ -15,3 +15,5 @@ __pycache__/
 # Dades originals Meteocat (fora del repositori)
 data/raw/
 update.log
+*.bak*
+*.congelat
