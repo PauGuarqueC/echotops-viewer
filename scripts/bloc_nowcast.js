@@ -1647,6 +1647,7 @@ async function nowcActiva(on){
     ctx.textAlign = 'left';
   }
   // ---- Marcadors per tipus i font (gota = pluviòmetre, rombe = aforador; lletra = font: A = ACA, S = SAIH Ebre) + panell agrupat per font ----
+  map.createPane('acaBase').style.zIndex = 454;        // gotes grises (sense precipitació): per sota dels aforadors (455); les etiquetes d'avís dels pluviòmetres (460) hi van per sobre
   window.acaSimbol = function(tipus){
     return tipus === 'gota' ? '<svg width="9" height="11" viewBox="0 0 30 34" style="display:inline;vertical-align:-1px;margin-right:3px"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="currentColor"/></svg>'
                              : '<span style="margin-right:3px;font-size:10px">◆</span>';
@@ -1657,8 +1658,8 @@ async function nowcActiva(on){
     const lt = lletra ? `<text x="15" y="${gota ? 26 : 19}" font-size="11" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.2" paint-order="stroke" text-anchor="middle" font-family="sans-serif">${lletra}</text>` : '';
     const forma = gota ? `<path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="${fill}" fill-opacity="${op}" stroke="#fff" stroke-width="1.8"/>`
                        : `<rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="${fill}" fill-opacity="${op}" stroke="#fff" stroke-width="1.8"/>`;
-    return L.divIcon({ className: '', iconSize: gota ? [22, 25] : [24, 24], iconAnchor: gota ? [11, 15] : [12, 12],
-      html: `<svg width="${gota ? 22 : 24}" height="${gota ? 25 : 24}" viewBox="0 0 30 ${gota ? 34 : 30}" style="display:block;overflow:visible;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))">${forma}${lt}</svg>` });
+    return L.divIcon({ className: '', iconSize: gota ? [18, 20] : [19, 19], iconAnchor: gota ? [9, 12] : [9.5, 9.5],
+      html: `<svg width="${gota ? 18 : 19}" height="${gota ? 20 : 19}" viewBox="0 0 30 ${gota ? 34 : 30}" style="display:block;overflow:visible;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))">${forma}${lt}</svg>` });
   };
   // Panell: les superposicions s'agrupen per font (plegables; ACA amb interruptor general). Per afegir-hi una font nova (p. ex. SAIH Ebre): una entrada a GRUPS
   (function(){
@@ -1813,7 +1814,7 @@ async function nowcActiva(on){
       if (!marcs.length) {
         d.estacions.forEach(e => {
           e.cur = { n: 0 };
-          const m = L.marker([e.lat, e.lon], { pane: 'acaPane', icon: window.acaIcona('gota', 'aca', COL[0], 0.5) });
+          const m = L.marker([e.lat, e.lon], { pane: 'acaBase', icon: window.acaIcona('gota', 'aca', COL[0], 0.5) });
           m.bindPopup(() => html(e)); m.addTo(grup);
           const p = L.marker([e.lat, e.lon], { pane: 'acaPane', icon: L.divIcon({ className: '', iconSize: [0, 0], html: '' }) });
           p.bindPopup(() => html(e));
@@ -2195,6 +2196,7 @@ async function nowcActiva(on){
         try{ if (sat && sat.capa && sat.capa.getContainer) els.push(sat.capa.getContainer()); }catch(_){}
         const ap = map.getPane('acaPane'); if (ap) els.push(ap);
         const af = map.getPane('afoPane'); if (af) els.push(af);
+        const ab = map.getPane('acaBase'); if (ab) els.push(ab);
         els.forEach(e => { if (e){ e.style.visibility = 'hidden'; if (ocults.indexOf(e) < 0) ocults.push(e); } });
         try{ nowc.marcs.clearLayers(); nowc.movCapa.clearLayers(); }catch(_){}
       } else if (ocults.length){
