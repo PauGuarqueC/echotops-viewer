@@ -356,11 +356,11 @@
         </label>
         <div id="mov-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="aca-toggle" checked style="margin-top:2px"> <span>Pluviòmetres ACA</span>
+          <input type="checkbox" id="aca-toggle" checked style="margin-top:2px"> <svg width="13" height="15" viewBox="0 0 30 34" style="flex:none;margin:1px 0 0 1px;overflow:visible"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="26" font-size="12" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">A</text></svg> <span>Pluviòmetres ACA</span>
         </label>
         <div id="aca-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="afo-toggle" checked style="margin-top:2px"> <span>Aforadors ACA (cabal)</span>
+          <input type="checkbox" id="afo-toggle" checked style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="12" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">A</text></svg> <span>Aforadors ACA (cabal)</span>
         </label>
         <div id="afo-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;">
