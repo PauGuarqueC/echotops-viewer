@@ -1646,6 +1646,64 @@ async function nowcActiva(on){
     lbl.forEach((t, i) => { if (t) ctx.fillText(t, x + (mode === 'centre' ? (i + 0.5) : (i + 1)) * bw, alt ? (i % 2 === 0 ? by - 4.8 * u : by + bh + 5.5 * u) : by + 17 * u); });
     ctx.textAlign = 'left';
   }
+  // ---- Marcadors per tipus i font (gota = pluviòmetre, rombe = aforador; lletra = font: A = ACA, S = SAIH Ebre) + panell agrupat per font ----
+  window.acaSimbol = function(tipus){
+    return tipus === 'gota' ? '<svg width="9" height="11" viewBox="0 0 30 34" style="display:inline;vertical-align:-1px;margin-right:3px"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="currentColor"/></svg>'
+                             : '<span style="margin-right:3px;font-size:10px">◆</span>';
+  };
+  window.acaIcona = function(tipus, font, fill, op){
+    const lletra = ({ aca: 'A', saih: 'S' })[font] || '';
+    const gota = tipus === 'gota';
+    const lt = lletra ? `<text x="15" y="${gota ? 26 : 19}" font-size="11" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.2" paint-order="stroke" text-anchor="middle" font-family="sans-serif">${lletra}</text>` : '';
+    const forma = gota ? `<path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="${fill}" fill-opacity="${op}" stroke="#fff" stroke-width="1.8"/>`
+                       : `<rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="${fill}" fill-opacity="${op}" stroke="#fff" stroke-width="1.8"/>`;
+    return L.divIcon({ className: '', iconSize: gota ? [22, 25] : [24, 24], iconAnchor: gota ? [11, 15] : [12, 12],
+      html: `<svg width="${gota ? 22 : 24}" height="${gota ? 25 : 24}" viewBox="0 0 30 ${gota ? 34 : 30}" style="display:block;overflow:visible;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))">${forma}${lt}</svg>` });
+  };
+  // Panell: les superposicions s'agrupen per font (plegables; ACA amb interruptor general). Per afegir-hi una font nova (p. ex. SAIH Ebre): una entrada a GRUPS
+  (function(){
+    let n = 0;
+    const T = setInterval(() => { if (document.getElementById('smp-toggle') || ++n > 25) { clearInterval(T); fes(); } }, 300);
+    function fes(){
+      try{
+        const cap = document.querySelector('.nowc-sec.sup-cap'); if (!cap || cap.parentNode.querySelector('.afo-grup')) return;
+        const lab = id => { const i = document.getElementById(id); return i ? i.closest('label') : null; };
+        const idd = id => document.getElementById(id);
+        const GRUPS = [
+          { nom: 'Radar AEMET', els: [lab('nowc-toggle'), idd('nowc-info'), lab('mov-toggle'), idd('mov-info')] },
+          { nom: 'ACA', tot: ['aca-toggle', 'afo-toggle'], els: [lab('aca-toggle'), idd('aca-info'), lab('afo-toggle'), idd('afo-info')] },
+          { nom: 'Meteocat', els: [(lab('smp-toggle') || {}).parentElement] },
+        ];
+        const st = document.createElement('style');
+        st.textContent = '.afo-gh{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin-top:9px !important;padding-top:6px;border-top:1px solid var(--panel-border)}.afo-gh label{cursor:pointer;text-transform:none;font-weight:400;letter-spacing:0;display:flex;gap:4px;align-items:center}.afo-grup.plegat .afo-cos{display:none}';
+        document.head.appendChild(st);
+        let ref = cap;
+        GRUPS.forEach(g => {
+          const els = g.els.filter(e => e && e !== cap.parentNode); if (!els.length) return;
+          const w = document.createElement('div'); w.className = 'afo-grup';
+          const k = 'nowc_grup_' + g.nom; let pl = false; try { pl = localStorage.getItem(k) === '1'; } catch (_) {}
+          w.classList.toggle('plegat', pl);
+          const h = document.createElement('div'); h.className = 'nowc-sec afo-gh';
+          h.innerHTML = '<span class="afo-fl">' + (pl ? '▸' : '▾') + ' ' + g.nom + '</span>' + (g.tot ? '<label title="Activa o desactiva tota la font"><input type="checkbox" class="afo-tot"> tot</label>' : '');
+          h.addEventListener('click', ev => {
+            if (ev.target.closest && ev.target.closest('label')) return;
+            const p = !w.classList.contains('plegat'); w.classList.toggle('plegat', p);
+            h.querySelector('.afo-fl').textContent = (p ? '▸ ' : '▾ ') + g.nom; try { localStorage.setItem(k, p ? '1' : '0'); } catch (_) {}
+          });
+          const cos = document.createElement('div'); cos.className = 'afo-cos';
+          w.appendChild(h); w.appendChild(cos);
+          ref.parentNode.insertBefore(w, ref.nextSibling); ref = w;
+          els.forEach(e => cos.appendChild(e));
+          if (g.tot) {
+            const tt = h.querySelector('.afo-tot'), ins = g.tot.map(idd).filter(Boolean);
+            const sync = () => { tt.checked = ins.every(i => i.checked); };
+            ins.forEach(i => i.addEventListener('change', sync)); sync();
+            tt.addEventListener('change', () => { const v = tt.checked; ins.forEach(i => { if (i.checked !== v) { i.checked = v; i.dispatchEvent(new Event('change', { bubbles: true })); } }); sync(); });
+          }
+        });
+      }catch(e){ console.warn('Panell agrupat per font', e); }
+    }
+  })();
   // ---- Pluviòmetres ACA (data/aca/pluja_hist.json, generat per aca_pluja.py): segueixen la barra de temps ----
   (function(){
     const COL = ['#888888', '#FFE000', '#F28C00', '#C8102E'];
@@ -1710,7 +1768,7 @@ async function nowcActiva(on){
           const en30 = e.cur.a30 / l30 >= e.cur.a3h / l3;
           const txt = n === 1 ? `${Math.round(e.cur.i)}<small>mm/h</small>` : `${Math.round(en30 ? e.cur.a30 : e.cur.a3h)}<small>mm/${en30 ? '30′' : '3h'}</small>`;
           p.setIcon(L.divIcon({ className: '', iconSize: [0, 0],
-            html: `<div class="aca-pill" style="background:${COL[n]};color:${n === 1 ? '#222' : '#fff'}">${txt}</div>` }));
+            html: `<div class="aca-pill" style="background:${COL[n]};color:${n === 1 ? '#222' : '#fff'}">${window.acaSimbol('gota')}${txt}</div>` }));
           p.setZIndexOffset(1000 * n);
           if (grup.hasLayer(m)) grup.removeLayer(m);
           if (!grup.hasLayer(p)) grup.addLayer(p);
@@ -1755,7 +1813,7 @@ async function nowcActiva(on){
       if (!marcs.length) {
         d.estacions.forEach(e => {
           e.cur = { n: 0 };
-          const m = L.circleMarker([e.lat, e.lon], { pane: 'acaPane', radius: 4.5, color: '#777', weight: 0.8, opacity: 0.35, fillColor: COL[0], fillOpacity: 0.28 });
+          const m = L.marker([e.lat, e.lon], { pane: 'acaPane', icon: window.acaIcona('gota', 'aca', COL[0], 0.5) });
           m.bindPopup(() => html(e)); m.addTo(grup);
           const p = L.marker([e.lat, e.lon], { pane: 'acaPane', icon: L.divIcon({ className: '', iconSize: [0, 0], html: '' }) });
           p.bindPopup(() => html(e));
@@ -1882,12 +1940,12 @@ async function nowcActiva(on){
         if (n >= 1) nact++;
         if (n >= 2) {                                      // moderat o superior: etiqueta amb el cabal
           p.setIcon(L.divIcon({ className: '', iconSize: [0, 0],
-            html: `<div class="aca-pill" style="background:${COL[n]};color:${n === 2 ? '#222' : '#fff'}">${f1(c.v)}<small>m³/s</small></div>` }));
+            html: `<div class="aca-pill" style="background:${COL[n]};color:${n === 2 ? '#222' : '#fff'}">${window.acaSimbol('rombe')}${f1(c.v)}<small>m³/s</small></div>` }));
           p.setZIndexOffset(1000 * n);
           if (grup.hasLayer(m)) grup.removeLayer(m);
           if (!grup.hasLayer(p)) grup.addLayer(p);
         } else {
-          m.setStyle({ fillColor: n < 0 ? '#888888' : COL[n], fillOpacity: n < 0 ? 0.25 : 0.85, opacity: n < 0 ? 0.35 : 0.9 });
+          const ik = n < 0 ? 'x' : n; if (o.ik !== ik) { o.ik = ik; m.setIcon(window.acaIcona('rombe', 'aca', n < 0 ? '#888888' : COL[n], n < 0 ? 0.5 : 0.92)); }
           if (grup.hasLayer(p)) grup.removeLayer(p);
           if (!grup.hasLayer(m)) grup.addLayer(m);
         }
@@ -1903,7 +1961,7 @@ async function nowcActiva(on){
         const e = { id: id, nom: x.nom, comarca: x.comarca, lat: x.lat, lon: x.lon, q: l.q, sq: l.sq, sh: l.sh, riu: l.riu };
         const o = { e: e, cur: { v: null, t: NaN, h: null }, mode: 'q', key: '' };
         const op = { minWidth: 316, maxWidth: 330 };
-        o.m = L.circleMarker([e.lat, e.lon], { pane: 'afoPane', radius: 5.5, color: '#fff', weight: 1.2, fillColor: COL[0], fillOpacity: 0.8 });
+        o.m = L.marker([e.lat, e.lon], { pane: 'afoPane', icon: window.acaIcona('rombe', 'aca', COL[0], 0.9) });
         o.m.bindPopup(() => html(o), op);
         o.p = L.marker([e.lat, e.lon], { pane: 'afoPane', icon: L.divIcon({ className: '', iconSize: [0, 0], html: '' }) });
         o.p.bindPopup(() => html(o), op);
