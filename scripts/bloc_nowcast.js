@@ -2136,6 +2136,7 @@ async function nowcActiva(on){
         try{ if (typeof radfr !== 'undefined' && radfr.ov) els.push(radfr.ov.getElement()); }catch(_){}
         try{ if (sat && sat.capa && sat.capa.getContainer) els.push(sat.capa.getContainer()); }catch(_){}
         const ap = map.getPane('acaPane'); if (ap) els.push(ap);
+        const af = map.getPane('afoPane'); if (af) els.push(af);
         els.forEach(e => { if (e){ e.style.visibility = 'hidden'; if (ocults.indexOf(e) < 0) ocults.push(e); } });
         try{ nowc.marcs.clearLayers(); nowc.movCapa.clearLayers(); }catch(_){}
       } else if (ocults.length){
