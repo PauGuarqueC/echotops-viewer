@@ -222,8 +222,10 @@ def segueix(cub, ok, lb, ts, llindar, min_px, k_min_vel=0, finestra_min=60, min_
             lon = w_ + (cx + 0.5) / W * (e_ - w_)
             if mida >= min_px:
                 fila = [pid, round(lat, 3), round(lon, 3), vel, rumb]
-                if mm_h is not None:      # intensitat mitjana de la cel·la (mm/h) per a l'evolució al gràfic
-                    fila.append(round(float(mm_h[np.minimum(cub[k][lab == (j + 1)], 12)].mean()), 1))
+                if mm_h is not None:      # intensitat de la cel·la (mm/h): mitjana per a l'evolució al gràfic + percentil 90 (nucli, robust al soroll)
+                    v_px = mm_h[np.minimum(cub[k][lab == (j + 1)], 12)]
+                    fila.append(round(float(v_px.mean()), 1))
+                    fila.append(round(float(np.percentile(v_px, 90)), 1))
                 files.append(fila)
         sortida[k] = files
         for pid in [q for q, p in pistes.items() if k - p["k"] > 3]:
@@ -359,7 +361,7 @@ def main():
               if (fi - ts[kk]).total_seconds() <= a.hores_moviment * 3600}
         (tmp / "moviment.json").write_text(json.dumps({
             "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "pas_min": P.PAS_MIN, "hores": a.hores_moviment,
-            "columnes": ["id", "lat", "lon", "vel_kmh", "rumb", "mm_h"], "frames": fr,
+            "columnes": ["id", "lat", "lon", "vel_kmh", "rumb", "mm_h", "mm_p90"], "frames": fr,
         }, separators=(",", ":")))
     (tmp / "avisos.json").write_text(json.dumps({
         "final_utc": fi.strftime("%Y-%m-%dT%H:%M:%SZ"), "bounds": lb,

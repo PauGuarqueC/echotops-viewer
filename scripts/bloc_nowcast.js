@@ -630,7 +630,12 @@
       }
       // cap de la cel·la: fletxa orientada + etiqueta de velocitat
       const mou = vel !== null && vel >= 8;
-      const pill = vel === null ? '' : `<span class="nowc-pill">${vel < 8 ? 'quasi quieta' : vel + ' km/h'}</span>`;
+      const mmh = (r[5] === undefined || r[5] === null) ? null : r[5];
+      const fmmh = x => (x >= 10 ? Math.round(x) : x.toFixed(1).replace('.', ','));
+      const mmTxt = mmh === null ? null : fmmh(mmh) + ' mm/h';
+      const mmP90 = (r[6] === undefined || r[6] === null) ? null : r[6];
+      const pillTxt = mmP90 !== null ? fmmh(mmP90) + ' mm/h' : mmTxt !== null ? mmTxt : (vel === null ? '' : (vel < 8 ? 'quasi quieta' : vel + ' km/h'));
+      const pill = pillTxt ? `<span class="nowc-pill">${pillTxt}</span>` : '';
       const fletxa = mou ? `<svg class="nowc-svg" width="48" height="48" viewBox="-24 -24 48 48" style="transform:rotate(${rumb}deg)">
           <path d="M0 -4 L0 -15" stroke="#0b1320" stroke-opacity=".55" stroke-width="6" stroke-linecap="round" fill="none"/>
           <path d="M0 -23 L7.5 -11 L0 -14.5 L-7.5 -11 Z" fill="#0b1320" fill-opacity=".55" stroke="#0b1320" stroke-opacity=".55" stroke-width="3.5" stroke-linejoin="round"/>
@@ -638,11 +643,12 @@
           <path d="M0 -22 L6.2 -11.6 L0 -14.8 L-6.2 -11.6 Z" fill="${col}" stroke="#fff" stroke-width="1" stroke-linejoin="round"/></svg>` : '';
       const m = L.marker([lat, lon], { keyboard: false, icon: L.divIcon({ className: 'nowc-mv', iconSize: [48, 48], iconAnchor: [24, 24],
         html: `${fletxa}<span class="nowc-dot" style="background:${col}"></span>${pill}` }) });
-      m._exp = { t: 'mv', col, mou, rumb, pill: vel === null ? '' : (vel < 8 ? 'quasi quieta' : vel + ' km/h') };
+      m._exp = { t: 'mv', col, mou, rumb, pill: pillTxt };
       const txt = `<div class="nowc-pop"><div class="nowc-pop-v">${vel === null ? '—' : (vel < 8 ? 'Quasi quieta' : vel + ' km/h')}` +
         `${mou ? ` <span>cap al ${nowcRumbTxt(rumb)}</span>` : ''}</div>` +
         `<div class="nowc-pop-s">${vel === null ? 'Encara no calculable (cel·la recent)' : (mou ? `Rumb ${rumb}° · ` : '') + `~${vel} km/h`}` +
-        `${nseg > 0 ? ` · rastre de ${nowcDurada(nseg * pasMin)}` : ''}</div></div>`;
+        `${nseg > 0 ? ` · rastre de ${nowcDurada(nseg * pasMin)}` : ''}</div>` +
+        `${mmTxt !== null ? `<div class="nowc-pop-s">Pluja: mitjana <b>${mmTxt}</b>${mmP90 !== null ? ` · nucli (P90) <b>${fmmh(mmP90)} mm/h</b>` : ''}</div>` : ''}</div>`;
       m.on('click', () => { if (typeof pickingCenter !== 'undefined' && pickingCenter) return;
         L.popup({ maxWidth: 260 }).setLatLng([lat, lon]).setContent(txt).openOn(map); });
       m.addTo(nowc.movCapa);
