@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Echo Tops · ONOFRE / GRAF</title>
+<title>Meteo · Inundacions · ONOFRE / GRAF</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔥</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -268,7 +268,7 @@
 
 <div id="gate">
   <span class="mark">BOMBERS · GRAF · CTFC</span>
-  <h1>Echo Tops — accés restringit</h1>
+  <h1>Meteo · Inundacions — accés restringit</h1>
   <form id="gate-form">
     <input type="password" id="gate-input" placeholder="Contrasenya" autocomplete="off" />
     <button type="submit">Entrar</button>
@@ -280,7 +280,7 @@
   <div id="map"></div>
   <div id="topbar">
     <div class="brand">
-      <h1>Echo <span class="nom">Tops</span><span class="subtitle">dades Meteocat</span></h1>
+      <h1>Meteo · <span class="nom">Inundacions</span></h1>
       <input type="date" id="date-select" />
       <button id="live-btn" style="display:none;">Mostra en directe (48h)</button>
     </div>
@@ -3365,7 +3365,7 @@ async function nowcActiva(on){
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 20px Roboto, sans-serif';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Echo Tops · Bombers GRAF', 16, 25);
+    ctx.fillText('Meteo · Inundacions · Bombers GRAF', 16, 25);
     const { date, time } = fmtTs(ts);
     ctx.fillStyle = '#C8102E';
     ctx.font = 'bold 20px "Roboto Mono", monospace';
