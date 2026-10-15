@@ -839,7 +839,8 @@ function initMap(){
         </select>
         <div id="refl-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <div id="mod-ctl" style="display:none;margin-top:4px;">
-          <div id="mod-info" style="font-size:11px;line-height:1.4;"></div>
+          <div id="mod-mbtns" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+          <div id="mod-info" style="font-size:11px;line-height:1.4;margin-top:5px;"></div>
           <div style="display:flex;align-items:center;gap:4px;margin-top:4px;">
             <button type="button" id="mod-prev" title="Hora anterior" style="padding:2px 8px;">◀</button>
             <input type="range" id="mod-t" min="1" max="48" step="1" style="flex:1;margin:0;min-width:0;" title="Hora de la previsió">
@@ -980,13 +981,12 @@ function initMap(){
     let obert = null;
     const llistaPre = () => {
       const out = [];
-      Object.keys(mod.models || {}).forEach(k => { const M = mod.models[k];
-        out.push(['sep', M.nom]); out.push([`mod:${k}:h`, 'Pluja horària']); out.push([`mod:${k}:a`, 'Pluja acumulada']); });
+      if (Object.keys(mod.models || {}).length){ out.push(['mod:@:h', 'Pluja horària']); out.push(['mod:@:a', 'Pluja acumulada']); }   // el model es tria amb els botonets de la caixa
       return out;
     };
     const pinta = t => {
       const items = t === 'obs' ? OBS : llistaPre(), cur = refl.mode;
-      ll.innerHTML = items.map(([v, n]) => v === 'sep' ? `<div class="fons-sep">${n}</div>` : `<div class="fons-it${v === cur ? ' sel' : ''}" data-v="${v}"><span class="pt"></span><span>${n}</span></div>`).join('');
+      ll.innerHTML = items.map(([v, n]) => v === 'sep' ? `<div class="fons-sep">${n}</div>` : `<div class="fons-it${(v.indexOf('mod:@:') === 0 ? (String(cur).indexOf('mod:') === 0 && String(cur).slice(-2) === v.slice(-2)) : v === cur) ? ' sel' : ''}" data-v="${v}"><span class="pt"></span><span>${n}</span></div>`).join('');
     };
     const sync = () => {
       const esPre = String(refl.mode).indexOf('mod:') === 0, hiHaModels = Object.keys(mod.models || {}).length > 0;
@@ -1002,7 +1002,8 @@ function initMap(){
     }));
     ll.addEventListener('click', e => {
       const it = e.target.closest('.fons-it'); if (!it) return;
-      const v = it.dataset.v;
+      let v = it.dataset.v;
+      if (v.indexOf('mod:@:') === 0 && window.modModelActual) v = 'mod:' + window.modModelActual() + v.slice(5);
       if (cs.querySelector(`option[value="${v}"]`)){ cs.value = v; cs.dispatchEvent(new Event('change')); }
       sync(); tanca();
     });
@@ -1524,6 +1525,25 @@ async function nowcActiva(on){
     if (window.fonsSync) window.fonsSync();
   }
 
+  const MOD_CURT = { wrf: 'WRF', arome: 'AROME', icon: 'ICON' };
+  function modBotons(k){                                       // un botonet quadrat per model, a dalt de la caixa
+    const c = document.getElementById('mod-mbtns'); if (!c) return;
+    c.innerHTML = Object.keys(mod.models).map(m => {
+      const M = mod.models[m], r = new Date(M.run_utc), on = m === k;
+      return `<button type="button" data-k="${m}" title="${M.nom} · run ${String(r.getUTCDate()).padStart(2, '0')}/${String(r.getUTCMonth() + 1).padStart(2, '0')} ${String(r.getUTCHours()).padStart(2, '0')} UTC" ` +
+        `style="min-width:44px;height:30px;padding:0 6px;font:700 10px/1 var(--font-ui,sans-serif);border-radius:2px;cursor:pointer;border:1px solid ${on ? '#C8102E' : 'var(--panel-border,#ccc)'};` +
+        `background:${on ? 'rgba(200,16,46,.1)' : 'transparent'};color:${on ? '#C8102E' : 'inherit'};">${MOD_CURT[m] || M.nom}</button>`; }).join('');
+  }
+  window.modModelActual = () => {                              // model en ús, o l'últim, o el primer disponible
+    let k = mod.sel ? modK() : null;
+    if (!k){ try{ k = localStorage.getItem('nowc_mod_ultim'); }catch(_){} }
+    const ks = Object.keys(mod.models || {}); return (k && ks.indexOf(k) >= 0) ? k : ks[0];
+  };
+  function modTria(v){                                         // canvia model i/o tipus passant pel <select> ocult (font de veritat)
+    const cs = mod.cs; if (!cs || !cs.querySelector(`option[value="${v}"]`)) return false;
+    cs.value = v; cs.dispatchEvent(new Event('change')); return true;
+  }
+
   async function modCarrega(k){
     const M = mod.models[k];
     const clau = k + '@' + M.run_utc;
@@ -1578,6 +1598,8 @@ async function nowcActiva(on){
     if (!M){ info.textContent = 'Model no disponible'; return; }
     const hor = tipus === 'h', r0 = modMs(M), n = M.passos;
     document.getElementById('mod-acum-row').style.display = hor ? 'none' : 'inline-flex';
+    modBotons(k);
+    try{ localStorage.setItem('nowc_mod_ultim', k); }catch(_){}
     const sl = document.getElementById('mod-t'); sl.max = n - 1;
     const ara = Math.round(Date.now() / 3600000) * 3600000;
     if (mod.t === null || mod.t === undefined) mod.t = ara;
@@ -1637,6 +1659,7 @@ async function nowcActiva(on){
       q('mod-prev').addEventListener('click', () => canvia(+sl.value - 1));
       q('mod-next').addEventListener('click', () => canvia(+sl.value + 1));
       q('mod-ara').addEventListener('click', () => { mod.t = Math.round(Date.now() / 3600000) * 3600000; modMostra(); });
+      q('mod-mbtns').addEventListener('click', e => { const b = e.target.closest('button[data-k]'); if (b) modTria(`mod:${b.dataset.k}:${mod.sel && mod.sel.endsWith(':h') ? 'h' : 'a'}`); });
       const ac = q('mod-acum');
       try{ const v = localStorage.getItem('nowcast_modacum_v1'); if (v !== null && ac.querySelector(`option[value="${v}"]`)){ ac.value = v; mod.acum = +v; } }catch(_){}
       ac.addEventListener('change', () => { mod.acum = +ac.value; try{ localStorage.setItem('nowcast_modacum_v1', ac.value); }catch(_){} modMostra(); });

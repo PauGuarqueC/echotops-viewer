@@ -268,6 +268,10 @@ def main():
     ap.add_argument("--bbox-arome", type=float, nargs=4, default=[39.6, -1.4, 43.4, 4.2], metavar=("S", "W", "N", "E"))
     ap.add_argument("--sense-wrf", action="store_true")
     ap.add_argument("--sense-arome", action="store_true")
+    ap.add_argument("--icon-dir", default="/home/labfire/data/ICON-EU")
+    ap.add_argument("--res-icon", type=float, default=0.04)
+    ap.add_argument("--bbox-icon", type=float, nargs=4, default=[38.8, -2.2, 44.0, 5.0], metavar=("S", "W", "N", "E"))
+    ap.add_argument("--sense-icon", action="store_true")
     a = ap.parse_args()
     Path(a.sortida).mkdir(parents=True, exist_ok=True)
     models = []
@@ -285,6 +289,14 @@ def main():
                 models.append(m)
         except Exception as ex:
             print("AROME: error:", repr(ex))
+    if not a.sense_icon:
+        try:
+            from icon_export import exporta_icon
+            m = exporta_icon(a.icon_dir, a.sortida, a.forca, a.res_icon, a.bbox_icon)
+            if m:
+                models.append(m)
+        except Exception as ex:
+            print("ICON-EU: error:", repr(ex))
     # índex (només els models que tenen dades)
     escriu_atomic(Path(a.sortida) / "index.json", json.dumps({"models": [{"model": m["model"], "nom": m["nom"], "run_utc": m["run_utc"]} for m in models]},
                                                             separators=(",", ":")))
