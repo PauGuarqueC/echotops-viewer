@@ -356,19 +356,19 @@
         </label>
         <div id="mov-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="aca-toggle" checked style="margin-top:2px"> <svg width="13" height="15" viewBox="0 0 30 34" style="flex:none;margin:1px 0 0 1px;overflow:visible"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="26" font-size="12" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">A</text></svg> <span>Pluviòmetres ACA</span>
+          <input type="checkbox" id="aca-toggle" checked style="margin-top:2px"> <svg width="13" height="15" viewBox="0 0 30 34" style="flex:none;margin:1px 0 0 1px;overflow:visible"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="26" font-size="8" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">ACA</text></svg> <span>Pluviòmetres ACA</span>
         </label>
         <div id="aca-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="afo-toggle" checked style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="12" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">A</text></svg> <span>Aforadors ACA (cabal)</span>
+          <input type="checkbox" id="afo-toggle" checked style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="8" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">ACA</text></svg> <span>Aforadors ACA (cabal)</span>
         </label>
         <div id="afo-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="saih-plu-toggle" checked style="margin-top:2px"> <svg width="13" height="15" viewBox="0 0 30 34" style="flex:none;margin:1px 0 0 1px;overflow:visible"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="26" font-size="12" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">S</text></svg> <span>Pluviòmetres SAIH Ebre</span>
+          <input type="checkbox" id="saih-plu-toggle" checked style="margin-top:2px"> <svg width="13" height="15" viewBox="0 0 30 34" style="flex:none;margin:1px 0 0 1px;overflow:visible"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="26" font-size="8" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">CHE</text></svg> <span>Pluviòmetres SAIH Ebre</span>
         </label>
         <div id="saih-plu-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="saih-afo-toggle" checked style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="12" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">S</text></svg> <span>Aforadors SAIH Ebre</span>
+          <input type="checkbox" id="saih-afo-toggle" checked style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="8" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">CHE</text></svg> <span>Aforadors SAIH Ebre</span>
         </label>
         <div id="saih-afo-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;">
@@ -1667,9 +1667,9 @@ async function nowcActiva(on){
                              : '<span style="margin-right:3px;font-size:10px">◆</span>';
   };
   window.acaIcona = function(tipus, font, fill, op){
-    const lletra = ({ aca: 'A', saih: 'S' })[font] || '';
+    const lletra = ({ aca: 'ACA', saih: 'CHE' })[font] || '';
     const gota = tipus === 'gota';
-    const lt = lletra ? `<text x="15" y="${gota ? 26 : 19}" font-size="11" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.2" paint-order="stroke" text-anchor="middle" font-family="sans-serif">${lletra}</text>` : '';
+    const lt = lletra ? `<text x="15" y="${gota ? 25.5 : 18.5}" font-size="${lletra.length > 1 ? 8 : 11}" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="${lletra.length > 1 ? 1.8 : 2.2}" paint-order="stroke" text-anchor="middle" font-family="sans-serif">${lletra}</text>` : '';
     const forma = gota ? `<path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="${fill}" fill-opacity="${op}" stroke="#fff" stroke-width="1.8"/>`
                        : `<rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="${fill}" fill-opacity="${op}" stroke="#fff" stroke-width="1.8"/>`;
     return L.divIcon({ className: '', iconSize: gota ? [18, 20] : [19, 19], iconAnchor: gota ? [9, 12] : [9.5, 9.5],
