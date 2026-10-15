@@ -23,6 +23,11 @@ python3 scripts/aca_collector.py --sortida data/aca || echo "aca: error" >&2
 python3 scripts/aca_pluja.py --sortida data/aca || echo "aca pluja: error" >&2
 python3 scripts/gen_dies.py || echo "aca dies: error" >&2
 python3 scripts/gen_dies_afo.py || echo "aca dies afo: error" >&2
+if [ -f "$HOME/.saih/env" ]; then
+  source "$HOME/.saih/env"
+  python3 scripts/saih_collector.py --sortida data/saih || echo "saih: error" >&2
+  python3 scripts/gen_dies_saih.py --dies 3 || echo "saih dies: error" >&2
+fi
 python3 scripts/smp_collector.py 360 || echo "smp: error" >&2
 python3 scripts/radar_fr_collector.py || echo "radar fr: error" >&2
 python3 scripts/radar_fr_refl_collector.py || echo "radar fr refl: error" >&2
