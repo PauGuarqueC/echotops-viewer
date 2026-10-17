@@ -33,8 +33,8 @@ if [ -f "$HOME/.saih/env" ]; then
   python3 scripts/gen_dies_saih.py --dies 3 || echo "saih dies: error" >&2
 fi
 python3 scripts/smp_collector.py 360 || echo "smp: error" >&2
-python3 scripts/radar_fr_collector.py || echo "radar fr: error" >&2
-python3 scripts/radar_fr_refl_collector.py || echo "radar fr refl: error" >&2
+# retirat (ara la font és OPERA): python3 scripts/radar_fr_collector.py || echo "radar fr: error" >&2
+# retirat (ara la font és OPERA): python3 scripts/radar_fr_refl_collector.py || echo "radar fr refl: error" >&2
 
 git add data/
 if git diff --cached --quiet; then
