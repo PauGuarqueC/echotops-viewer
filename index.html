@@ -2287,10 +2287,19 @@ async function nowcActiva(on){
     const pane = map.createPane('riusPane'); pane.style.zIndex = 420;          // sobre el radar, sota les estacions
     const tog = document.getElementById('rius-toggle'), info = document.getElementById('rius-info');
     const rend = L.canvas({ pane: 'riusPane', tolerance: 5 });
-    let capa = null, dades = null, carregant = false;
-    // gruix segons el zoom del visor: rius (c=1) sempre; rieres amb nom (c=2) a partir de zoom 10
-    const pes = c => { const z = map.getZoom(); return c === 1 ? (z < 8 ? 1 : z < 10 ? 1.6 : 2.4) : (z < 10 ? 0 : z < 12 ? 1 : 1.6); };
-    const estil = f => { const w = pes(f.properties.c); return w ? { stroke: true, color: COL, weight: w, opacity: 0.85, lineCap: 'round', lineJoin: 'round' } : { stroke: false }; };
+    const Z_RIERES = 11;                                   // zoom a partir del qual surten les rieres i els seus noms (més alt = cal apropar-se més)
+    let capaR = null, capaT = null, dades = null, carregant = false;
+    // gruix segons el zoom del visor: rius (c=1) sempre; rieres amb nom (c=2) a partir de Z_RIERES
+    const pes = c => { const z = map.getZoom(); return c === 1 ? (z < 8 ? 1 : z < 10 ? 1.6 : 2.4) : (z < Z_RIERES ? 0 : z < Z_RIERES + 2 ? 1 : 1.6); };
+    const estil = f => ({ stroke: true, color: COL, weight: pes(f.properties.c) || 1, opacity: 0.85, lineCap: 'round', lineJoin: 'round' });
+    const nova = cls => L.geoJSON(dades, { pane: 'riusPane', renderer: rend, style: estil, filter: f => f.properties.c === cls,
+      onEachFeature: (f, l) => { if (f.properties.n) l.bindTooltip(f.properties.n, { sticky: true, direction: 'top' }); } });
+    function sync(){                                        // les rieres només hi són quan es veuen: sense línia tampoc hi ha nom
+      if (!capaR) return;
+      const on = !!(tog && tog.checked), veuRieres = on && map.getZoom() >= Z_RIERES;
+      if (on){ if (!map.hasLayer(capaR)) capaR.addTo(map); capaR.setStyle(estil); } else if (map.hasLayer(capaR)) map.removeLayer(capaR);
+      if (veuRieres){ if (!map.hasLayer(capaT)) capaT.addTo(map); capaT.setStyle(estil); } else if (map.hasLayer(capaT)) map.removeLayer(capaT);
+    }
     function carrega(){
       if (dades || carregant) return Promise.resolve();
       carregant = true;
@@ -2301,18 +2310,17 @@ async function nowcActiva(on){
     function activa(){
       if (!tog) return;
       try{ localStorage.setItem(LS, tog.checked ? '1' : '0'); }catch(_){}
-      if (!tog.checked){ if (capa) map.removeLayer(capa); if (info) info.textContent = ''; return; }
+      if (!tog.checked){ sync(); if (info) info.textContent = ''; return; }
       carrega().then(() => {
         if (!dades || !tog.checked) return;
-        if (!capa) capa = L.geoJSON(dades, { pane: 'riusPane', renderer: rend, style: estil,
-          onEachFeature: (f, l) => { if (f.properties.n) l.bindTooltip(f.properties.n, { sticky: true, direction: 'top' }); } });
-        capa.addTo(map);
-        if (info) info.textContent = `${dades.features.length} rius i rieres · © OpenStreetMap`;
+        if (!capaR){ capaR = nova(1); capaT = nova(2); }
+        sync();
+        if (info) info.textContent = `${dades.features.length} rius i rieres · rieres a partir de zoom ${Z_RIERES} · © OpenStreetMap`;
       });
     }
-    map.on('zoomend', () => { if (capa && map.hasLayer(capa)) capa.setStyle(estil); });
+    map.on('zoomend', sync);
     window.riusExp = {                                      // exportació d'imatge i GIF: es dibuixa igual que al mapa
-      actiu: () => !!(dades && capa && map.hasLayer(capa)),
+      actiu: () => !!(dades && capaR && map.hasLayer(capaR)),
       dibuixa: (ctx, P, k) => {
         ctx.save(); ctx.strokeStyle = COL; ctx.globalAlpha = 0.9; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         dades.features.forEach(f => {
