@@ -220,7 +220,7 @@ def main():
     ap.add_argument("--min-km", type=float, default=1.0, help="els rius sense nom més curts que això es descarten")
     ap.add_argument("--max-continua-km", type=float, default=8.0, help="màxim de recorregut sense nom que s'afegeix a la continuació d'una riera")
     ap.add_argument("--max-salts", type=int, default=12, help="màxim de trams sense nom encadenats per riera")
-    ap.add_argument("--salta-m", type=float, default=150.0, help="uneix amb un tram recte les rieres que acaben a menys d'aquests metres d'un altre curs (0 = no ho fa)")
+    ap.add_argument("--salta-m", type=float, default=400.0, help="uneix amb un tram recte les rieres que acaben a menys d'aquests metres d'un altre curs (0 = no ho fa)")
     ap.add_argument("--max-mb", type=float, default=12.0)
     a = ap.parse_args()
     if a.brut and Path(a.brut).exists():
