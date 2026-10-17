@@ -516,7 +516,7 @@ function initMap(){
     mov: null, movActiu: false, movCapa: L.layerGroup() };
   const refl = { overlay: null, actiu: false, mode: 'echo' };
   const capaM = m => CAPA_MODES[m] || ((typeof m === 'string' && m.indexOf('mod:') === 0) ? [false, false] : null);
-  const CAPA_MODES = { 'echo': [false, false], 'refl': [true, false], 'sat': [false, true], 'echo+sat': [false, true], 'refl+sat': [true, true], 'radfr': [false, false], 'radfz': [false, false], 'radfh': [false, false], 'radoz': [false, false], 'rador': [false, false] };
+  const CAPA_MODES = { 'echo': [false, false], 'refl': [true, false], 'sat': [false, true], 'echo+sat': [false, true], 'refl+sat': [true, true], 'radoz': [false, false], 'rador': [false, false] };
   const mod = { models: {}, sel: null, t: null, acum: 0, overlay: null, cur: null, cache: {}, token: 0, pendent: null, cs: null, aplica: null };
   const sat = { actiu: false, op: 65, capa: null, time: null, errs: 0 };
   const REFL_LLEGENDA = [['rgb(150,215,255)', '15'], ['rgb(70,160,255)', '20'], ['rgb(0,190,220)', '25'], ['rgb(0,190,80)', '30'],
@@ -832,7 +832,7 @@ function initMap(){
       div.innerHTML = `<div class="nowc-cap"><span>Capes</span><span class="nowc-fl">▾</span></div><div class="nowc-body">
         <select id="capa-sel" style="display:none;">
           <option value="echo">Echotops (Meteocat)</option>
-          <option value="refl">Reflectivitat radar (AEMET)</option><option value="radfr">Radar França (lame d'eau)</option><option value="radfz">Radar França (reflectivitat)</option><option value="radfh">Radar França (alçada de la mesura)</option><option value="radoz">Reflectivitat OPERA (5 min)</option><option value="rador">Pluja estimada OPERA (5 min)</option>
+          <option value="refl">Reflectivitat radar (AEMET)</option><option value="radoz">Reflectivitat OPERA (5 min)</option><option value="rador">Pluja estimada OPERA (5 min)</option>
           <option value="sat">Satèl·lit IR 10,5 µm (MTG)</option>
           <option value="echo+sat">Echotops + satèl·lit</option>
           <option value="refl+sat">Reflectivitat + satèl·lit</option>
@@ -937,7 +937,7 @@ function initMap(){
 
   // ---- Selector de fons: dos botons (Observació / Predicció) a dalt a l'esquerra. El <select id="capa-sel"> (ocult) continua sent la font de veritat ----
   (function(){
-    const OBS = [['echo', 'Echotops (Meteocat)'], ['refl', 'Reflectivitat radar (AEMET)'], ['radfr', 'Radar França (lame d\'eau, Météo-France)'], ['radfz', 'Radar França (reflectivitat, Météo-France)'], ['radfh', 'Radar França (alçada de la mesura)'], ['radoz', 'Reflectivitat OPERA (5 min, Europa)'], ['rador', 'Pluja estimada OPERA (5 min, Europa)'], ['sat', 'Satèl·lit IR 10,5 µm (MTG)'], ['echo+sat', 'Echotops + satèl·lit'], ['refl+sat', 'Reflectivitat + satèl·lit']];
+    const OBS = [['echo', 'Echotops (Meteocat)'], ['refl', 'Reflectivitat radar (AEMET)'], ['radoz', 'Reflectivitat OPERA (5 min, Europa)'], ['rador', 'Pluja estimada OPERA (5 min, Europa)'], ['sat', 'Satèl·lit IR 10,5 µm (MTG)'], ['echo+sat', 'Echotops + satèl·lit'], ['refl+sat', 'Reflectivitat + satèl·lit']];
     const st = document.createElement('style');
     st.textContent = `
       #timeline-wrap{ padding:6px 12px 8px !important; }
@@ -1419,8 +1419,6 @@ function initMap(){
   const radfrMeta = m => m === 'radfr' ? radfr.meta : m === 'radoz' ? radfr.metaOZ : m === 'rador' ? radfr.metaO : radfr.metaZ;
   async function radfrCarrega(){
     if (radfr.carr) return; radfr.carr = true;
-    try{ const r = await fetch('data/radar_fr/meta.json?_=' + Date.now()); if (r.ok) radfr.meta = await r.json(); }catch(_){}
-    try{ const r = await fetch('data/radar_fr/refl_meta.json?_=' + Date.now()); if (r.ok) radfr.metaZ = await r.json(); }catch(_){}
     try{ const r = await fetch('data/radar_opera/meta.json?_=' + Date.now()); if (r.ok) radfr.metaO = await r.json(); }catch(_){}
     try{ const r = await fetch('data/radar_opera/refl_meta.json?_=' + Date.now()); if (r.ok) radfr.metaOZ = await r.json(); }catch(_){}
     radfr.ult = Date.now(); radfr.carr = false;
