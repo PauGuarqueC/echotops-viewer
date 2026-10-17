@@ -31,6 +31,7 @@ fi
 python3 scripts/smp_collector.py 360 || echo "smp: error" >&2
 python3 scripts/radar_fr_collector.py || echo "radar fr: error" >&2
 python3 scripts/radar_fr_refl_collector.py || echo "radar fr refl: error" >&2
+python3 scripts/opera_collector.py || echo "opera: error" >&2
 
 git add data/
 if git diff --cached --quiet; then
