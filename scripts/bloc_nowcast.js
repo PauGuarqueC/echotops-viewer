@@ -1574,7 +1574,7 @@ async function nowcActiva(on){
         const zm = refl.mode === 'radfz' || refl.mode === 'radoz', hm = refl.mode === 'radfh';
         const cols = zm ? [MOD_ZERO].concat(REFL_LLEGENDA.map(q => q[0])) : hm ? radfhPal().col : [MOD_ZERO].concat(MOD_PAL_H.map(q => q[1]));
         const labs = zm ? REFL_LLEGENDA.map(q => q[1]) : hm ? radfhPal().lim : MOD_PAL_H.map(q => String(q[0]));
-        const tit = zm ? 'RADAR FRANÇA · REFLECTIVITAT (dBZ)' : hm ? 'RADAR FRANÇA · ALÇADA DE LA MESURA (km)' : 'RADAR FRANÇA · LAME D\'EAU (mm/h)';
+        const tit = zm ? 'RADAR OPERA · REFLECTIVITAT (dBZ)' : 'RADAR OPERA · PLUJA ESTIMADA (mm/h)';
         blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, tit, cols, labs, 'alterna') });
       }
       if (satOn){
@@ -1604,7 +1604,7 @@ async function nowcActiva(on){
       let cx = pad; const util = Wc - 2 * pad - gap * Math.max(0, blocs.length - 1);
       blocs.forEach(b => { const w = Math.min(util * b.w / tot, 520 * u); b.f(cx, fy + 7 * u, w); cx += w + gap; });
       ctx.fillStyle = '#7b8794'; ctx.font = `400 ${9 * u}px ${EXP_FONT}`; ctx.textAlign = 'left';
-      const cred = [echoOn ? 'Meteocat' : '', (reflOn || stormOn) ? 'AEMET' : '', satOn ? '© EUMETSAT' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
+      const cred = [echoOn ? 'Meteocat' : '', reflOn ? 'AEMET' : '', (radfrOn || stormOn) ? 'OPERA · EUMETNET (CC BY 4.0)' : '', satOn ? '© EUMETSAT' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
       const txtCred = `Dades: ${cred}  |  Mapa base: ${base.length ? (currentBase === 'satelit' ? 'Esri' : currentBase === 'icgc' ? '© ICGC' : currentBase === 'topo' ? '© OpenTopoMap · OSM' : '© CARTO · © OpenStreetMap') : ''}`;
       ctx.fillText(txtCred, pad, fy + FH - 8 * u);
       if (totBase && fallBase > totBase * 0.2) { ctx.textAlign = 'right'; ctx.fillStyle = '#C8102E'; ctx.fillText('Atenció: part del mapa base no s\'ha pogut carregar', Wc - pad, fy + FH - 8 * u); }
@@ -1674,7 +1674,7 @@ async function nowcActiva(on){
         const sg = sig() + '|' + (modo ? mod.t : '');
         if (sg === prev) continue; prev = sg;
         const r = await expCompon(x0, y0, x1, y1, { llarg: 1100, ample: 1100, sil: true, prog: () => {}, cat: EXP.cat });
-        if (!gif) gif = new GIF({ workers: 3, quality: 5, globalPalette: true, width: r.cv.width, height: r.cv.height, workerScript: wUrl });
+        if (!gif) gif = new GIF({ workers: 3, quality: 5, globalPalette: false, width: r.cv.width, height: r.cv.height, workerScript: wUrl });
         if (last) last.delay = dl;
         last = { delay: dl };
         gif.addFrame(r.cv, { copy: true, delay: dl }); if (!nFot) nom = r.nomBase; nFot++;

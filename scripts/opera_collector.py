@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEST = ROOT / "data" / "radar_opera"
 BRUT = Path.home() / "echotops-data" / "opera"      # .h5 originals (fora del repositori)
 S3 = "https://s3.waw3-1.cloudferro.com/openradar-24h"
-NMAX = 36                     # fotogrames guardats (36 x 5 min = 3 h, com el radar de França)
+NMAX = 72                     # fotogrames guardats (72 x 5 min = 6 h: el GIF d'Últimes 6 h necessita OPERA a tot el rang)
 W, E, S, N = -12.0, 8.0, 35.0, 47.0     # finestra (graus): ampla, per veure què s'apropa
 PX = 1200.0                   # mida de píxel en metres de Mercator
 BREAKS = [0.1, 0.2, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 20, 24, 30, 40, 50, 60, 80, 100, 125]   # mm/h
