@@ -1,4 +1,6 @@
 #!/bin/bash
+# retall del log: es queda amb les últimes 5000 línies si passa de 20 MB
+[ -f update.log ] && [ "$(stat -c%s update.log)" -gt 20000000 ] && tail -5000 update.log > /tmp/update_log_tmp && cat /tmp/update_log_tmp > update.log
 set -e
 cd "$(dirname "$0")"
 
@@ -13,8 +15,10 @@ python3 scripts/build_manifest.py
 rsync -a ~/echotops-data/png/ data/png/
 
 # --- Nowcasting: tempestes enganxades (compost AEMET) ---
-python3 scripts/aemet_compo.py --sortida "$HOME/echotops-data/aemet" || echo "nowcast: no s'ha pogut descarregar el compost" >&2
-python3 scripts/nowcast_export.py --arrel "$HOME/echotops-data/aemet" --sortida data/nowcast || echo "nowcast: error a l'exportació" >&2
+python3 scripts/opera_collector.py || echo "opera: error" >&2
+python3 scripts/opera_a_arxiu.py --hores 3 || echo "opera arxiu: error" >&2
+# retirat (ara la font del nowcast és OPERA): python3 scripts/aemet_compo.py --sortida "$HOME/echotops-data/aemet" || echo "nowcast: no s'ha pogut descarregar el compost" >&2
+python3 scripts/nowcast_export.py --arrel "$HOME/echotops-data/opera_1km" --sortida data/nowcast || echo "nowcast: error a l'exportació" >&2
 
 # --- Previsió: WRF-SMC i AROME (pluja de Météo-France) ---
 python3 scripts/arome_precip.py || echo "arome: error a la descàrrega" >&2
@@ -31,7 +35,6 @@ fi
 python3 scripts/smp_collector.py 360 || echo "smp: error" >&2
 python3 scripts/radar_fr_collector.py || echo "radar fr: error" >&2
 python3 scripts/radar_fr_refl_collector.py || echo "radar fr refl: error" >&2
-python3 scripts/opera_collector.py || echo "opera: error" >&2
 
 git add data/
 if git diff --cached --quiet; then
