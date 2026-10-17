@@ -514,7 +514,7 @@ function initMap(){
   // Els avisos fixos amb so surten només per a les cel·les noves de l'últim fotograma (no en recórrer l'historial).
   const nowc = { hist: null, ultim: null, marcs: L.layerGroup(), actiu: true, timer: null, ts: null, vistos: [], so: true, audio: null, pendent: 0,
     mov: null, movActiu: false, movCapa: L.layerGroup() };
-  const refl = { overlay: null, actiu: false, mode: 'echo' };
+  const refl = { overlay: null, actiu: false, mode: 'radoz' };
   const capaM = m => CAPA_MODES[m] || ((typeof m === 'string' && m.indexOf('mod:') === 0) ? [false, false] : null);
   const CAPA_MODES = { 'echo': [false, false], 'refl': [true, false], 'sat': [false, true], 'echo+sat': [false, true], 'refl+sat': [true, true], 'radoz': [false, false], 'rador': [false, false] };
   const mod = { models: {}, sel: null, t: null, acum: 0, overlay: null, cur: null, cache: {}, token: 0, pendent: null, cs: null, aplica: null };
@@ -867,19 +867,19 @@ function initMap(){
         </label>
         <div id="mov-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="aca-toggle" checked style="margin-top:2px"> <svg width="13" height="15" viewBox="0 0 30 34" style="flex:none;margin:1px 0 0 1px;overflow:visible"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="26" font-size="6.5" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">ACA</text></svg> <span>Pluviòmetres ACA</span>
+          <input type="checkbox" id="aca-toggle" style="margin-top:2px"> <svg width="13" height="15" viewBox="0 0 30 34" style="flex:none;margin:1px 0 0 1px;overflow:visible"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="26" font-size="6.5" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">ACA</text></svg> <span>Pluviòmetres ACA</span>
         </label>
         <div id="aca-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="afo-toggle" checked style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="6.5" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">ACA</text></svg> <span>Aforadors ACA (cabal)</span>
+          <input type="checkbox" id="afo-toggle" style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="6.5" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">ACA</text></svg> <span>Aforadors ACA (cabal)</span>
         </label>
         <div id="afo-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="saih-plu-toggle" checked style="margin-top:2px"> <svg width="13" height="15" viewBox="0 0 30 34" style="flex:none;margin:1px 0 0 1px;overflow:visible"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="26" font-size="6.5" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">CHE</text></svg> <span>Pluviòmetres SAIH Ebre</span>
+          <input type="checkbox" id="saih-plu-toggle" style="margin-top:2px"> <svg width="13" height="15" viewBox="0 0 30 34" style="flex:none;margin:1px 0 0 1px;overflow:visible"><path d="M15 2 C15 2 4 15 4 21 a11 11 0 0 0 22 0 C26 15 15 2 15 2Z" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="26" font-size="6.5" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">CHE</text></svg> <span>Pluviòmetres SAIH Ebre</span>
         </label>
         <div id="saih-plu-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
-          <input type="checkbox" id="saih-afo-toggle" checked style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="6.5" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">CHE</text></svg> <span>Aforadors SAIH Ebre</span>
+          <input type="checkbox" id="saih-afo-toggle" style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="6.5" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">CHE</text></svg> <span>Aforadors SAIH Ebre</span>
         </label>
         <div id="saih-afo-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;">
@@ -2346,7 +2346,7 @@ async function nowcActiva(on){
           nav++;
         } else {
           if (grup.hasLayer(p)) grup.removeLayer(p);
-          if (!grup.hasLayer(m)) grup.addLayer(m);
+          if (tog && !tog.checked) { if (grup.hasLayer(m)) grup.removeLayer(m); } else if (!grup.hasLayer(m)) grup.addLayer(m);
         }
         if (p.isPopupOpen()) p.setPopupContent(html(e));
         if (m.isPopupOpen()) m.setPopupContent(html(e));
@@ -2400,11 +2400,11 @@ async function nowcActiva(on){
       fetch('data/aca/pluja_hist.json?_=' + Date.now()).then(r => r.ok ? r.json() : Promise.reject()).then(dades)
         .catch(() => { if (info) info.textContent = 'Sense dades dels pluviòmetres'; });
     }
-    function activa(on){
-      if (on) { grup.addTo(map); carrega(); clearInterval(timer); timer = setInterval(carrega, 5 * 60 * 1000); }
-      else { map.removeLayer(grup); clearInterval(timer); if (info) info.textContent = ''; }
+    function activa(on){                                   // la capa sempre és al mapa: desmarcada només amaga les estacions sense avís
+      if (!map.hasLayer(grup)) grup.addTo(map);
+      if (timer === null) { carrega(); timer = setInterval(carrega, 5 * 60 * 1000); } else pinta();
     }
-    window.acaMostra = t => { ts = t; if (tog && tog.checked) pinta(); };
+    window.acaMostra = t => { ts = t; pinta(); };
     if (tog) { tog.addEventListener('change', () => activa(tog.checked)); activa(tog.checked); }
   })();
   // ---- Aforadors ACA (cabal) [afo-v2]: llindars fixos (data/aca/llindars.json) + sèries de data/aca/dies_afo/*.json; segueixen la barra de temps ----
@@ -2500,7 +2500,7 @@ async function nowcActiva(on){
       o.key = k; open.setPopupContent(html(o)); grafica(o);
     }
     function refresca(){
-      if (!CAT || !tog || !tog.checked) return;
+      if (!CAT || !tog) return;
       const S = msSel(); let nact = 0, nsd = 0, pen = false;
       marcs.forEach(o => {
         const c = lectura(o.e, S);
@@ -2509,7 +2509,7 @@ async function nowcActiva(on){
         const { e, m, p } = o, n = c.v === null ? -1 : nivell(e.q, c.v);
         if (n < 0) nsd++;
         if (n >= 1) nact++;
-        if (n >= 2) {                                      // moderat o superior: etiqueta amb el cabal
+        if (n >= 1) {                                      // activació o superior: etiqueta amb el cabal
           p.setIcon(L.divIcon({ className: '', iconSize: [0, 0],
             html: `<div class="aca-pill" style="background:${COL[n]};color:${n === 2 ? '#222' : '#fff'}">${window.acaSimbol('rombe')}${f1(c.v)}<small>m³/s</small></div>` }));
           p.setZIndexOffset(1000 * n);
@@ -2518,7 +2518,7 @@ async function nowcActiva(on){
         } else {
           const ik = n < 0 ? 'x' : n; if (o.ik !== ik) { o.ik = ik; m.setIcon(window.acaIcona('rombe', 'aca', n < 0 ? '#888888' : COL[n], n < 0 ? 0.5 : 0.92)); }
           if (grup.hasLayer(p)) grup.removeLayer(p);
-          if (!grup.hasLayer(m)) grup.addLayer(m);
+          if (!tog.checked) { if (grup.hasLayer(m)) grup.removeLayer(m); } else if (!grup.hasLayer(m)) grup.addLayer(m);
         }
         actualitzaPopup(o, false);
       });
@@ -2567,9 +2567,9 @@ async function nowcActiva(on){
         .then(([cat, ul]) => { UL = ul; if (!CAT) { CAT = cat; crea(cat[0], cat[1]); } refresca(); })
         .catch(() => { if (info) info.textContent = 'Sense dades dels aforadors (falten llindars)'; });
     }
-    function activa(on){
-      if (on) { grup.addTo(map); carrega(); clearInterval(timer); timer = setInterval(carrega, 5 * 60 * 1000); }
-      else { map.removeLayer(grup); clearInterval(timer); if (info) info.textContent = ''; }
+    function activa(on){                                   // la capa sempre és al mapa: desmarcada només amaga les estacions sense avís
+      if (!map.hasLayer(grup)) grup.addTo(map);
+      if (timer === null) { carrega(); timer = setInterval(carrega, 5 * 60 * 1000); } else refresca();
     }
     { const prev = window.acaMostra; window.acaMostra = t => { if (prev) prev(t); tsA = t; refresca(); }; }
     if (tog) { tog.addEventListener('change', () => activa(tog.checked)); activa(tog.checked); }
@@ -2675,16 +2675,16 @@ async function nowcActiva(on){
         o.cur = { h: h, q: q };
         const s = estatA(o.e, o.cur), n = s.n, { m, p } = o;
         if (n === -1) nsd++; else if (n === -2) nsl++; else if (n >= 1) nav++;
-        if (n >= 2) {                                      // taronja o vermell: etiqueta amb el valor
+        if (n >= 1) {                                      // groc o superior: etiqueta amb el valor
           p.setIcon(L.divIcon({ className: '', iconSize: [0, 0],
-            html: `<div class="aca-pill" style="background:${COLN[n]};color:#fff">${window.acaSimbol('rombe')}${f1(s.v)}<small>${s.u}</small></div>` }));
+            html: `<div class="aca-pill" style="background:${COLN[n]};color:${n === 1 ? '#222' : '#fff'}">${window.acaSimbol('rombe')}${f1(s.v)}<small>${s.u}</small></div>` }));
           p.setZIndexOffset(1000 * n);
           if (gA.hasLayer(m)) gA.removeLayer(m);
           if (!gA.hasLayer(p)) gA.addLayer(p);
         } else {
           const ik = String(n); if (o.ik !== ik) { o.ik = ik; m.setIcon(window.acaIcona('rombe', 'saih', n === -1 ? GRIS : n <= 0 ? BLAU : COLN[n], n === -1 ? 0.5 : 0.92)); }
           if (gA.hasLayer(p)) gA.removeLayer(p);
-          if (!gA.hasLayer(m)) gA.addLayer(m);
+          if (tA && !tA.checked) { if (gA.hasLayer(m)) gA.removeLayer(m); } else if (!gA.hasLayer(m)) gA.addLayer(m);
         }
         actualitzaPopup(o, false);
       });
@@ -2728,7 +2728,7 @@ async function nowcActiva(on){
           nav++;
         } else {
           if (gP.hasLayer(p)) gP.removeLayer(p);
-          if (!gP.hasLayer(m)) gP.addLayer(m);
+          if (tP && !tP.checked) { if (gP.hasLayer(m)) gP.removeLayer(m); } else if (!gP.hasLayer(m)) gP.addLayer(m);
         }
         if (p.isPopupOpen()) p.setPopupContent(htmlP(o.e));
         if (m.isPopupOpen()) m.setPopupContent(htmlP(o.e));
@@ -2738,8 +2738,8 @@ async function nowcActiva(on){
     }
     function refresca(){
       if (!EST) return; const S = msSel();
-      if (tA && tA.checked) refrescaA(S);
-      if (tP && tP.checked) refrescaP(S);
+      refrescaA(S);
+      refrescaP(S);
     }
     function crea(est){
       Object.keys(est.estacions || {}).forEach(id => {
@@ -2789,11 +2789,9 @@ async function nowcActiva(on){
         .catch(() => { [iA, iP].forEach(i => { if (i) i.textContent = 'Sense dades del SAIH Ebre'; }); });
     }
     function activa(){
-      const A = !!(tA && tA.checked), P = !!(tP && tP.checked);
-      if (A) gA.addTo(map); else { map.removeLayer(gA); if (iA) iA.textContent = ''; }
-      if (P) gP.addTo(map); else { map.removeLayer(gP); if (iP) iP.textContent = ''; }
-      clearInterval(timer);
-      if (A || P) { carrega(); timer = setInterval(carrega, 5 * 60 * 1000); }
+      if (!map.hasLayer(gA)) gA.addTo(map);                 // les capes sempre són al mapa: desmarcades només amaguen les estacions sense avís
+      if (!map.hasLayer(gP)) gP.addTo(map);
+      if (timer === null) { carrega(); timer = setInterval(carrega, 5 * 60 * 1000); } else refresca();
     }
     { const prev = window.acaMostra; window.acaMostra = t => { if (prev) prev(t); tsS = t; refresca(); }; }
     [tA, tP].forEach(t => { if (t) t.addEventListener('change', activa); });
