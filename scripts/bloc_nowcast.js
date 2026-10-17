@@ -372,6 +372,10 @@
           <input type="checkbox" id="saih-afo-toggle" style="margin-top:2px"> <svg width="14" height="14" viewBox="0 0 30 30" style="flex:none;margin:1px 0 0 1px;overflow:visible"><rect x="5" y="5" width="20" height="20" transform="rotate(45 15 15)" fill="#1E88E5" stroke="#fff" stroke-width="2"/><text x="15" y="19.5" font-size="6.5" font-weight="700" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="2.4" paint-order="stroke" text-anchor="middle" font-family="sans-serif">CHE</text></svg> <span>Aforadors SAIH Ebre</span>
         </label>
         <div id="saih-afo-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
+        <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
+          <input type="checkbox" id="rius-toggle" style="margin-top:2px"> <span>Rius (Catalunya i conca de l'Ebre)</span>
+        </label>
+        <div id="rius-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:6px;">
           <input type="checkbox" id="nowc-so"> <span>So d'avís</span>
           <a href="#" id="nowc-prova" style="margin-left:auto;font-size:11px;">prova</a>
@@ -1556,6 +1560,7 @@ async function nowcActiva(on){
       if (!opt.senseLimits){
         await limCarrega(); expLimits(ctx, P, k);                                  // contorns sempre des de comarques.geojson (el WMS porta noms)
       }
+      if (window.riusExp && window.riusExp.actiu()){ try{ window.riusExp.dibuixa(ctx, P, k); }catch(e){ console.warn('rius exportacio', e); } }
       expVectors(ctx, P, k);
       ctx.restore();
       ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = Math.max(1, u); ctx.strokeRect(mx, my, MW, MH);
@@ -1604,7 +1609,7 @@ async function nowcActiva(on){
       let cx = pad; const util = Wc - 2 * pad - gap * Math.max(0, blocs.length - 1);
       blocs.forEach(b => { const w = Math.min(util * b.w / tot, 520 * u); b.f(cx, fy + 7 * u, w); cx += w + gap; });
       ctx.fillStyle = '#7b8794'; ctx.font = `400 ${9 * u}px ${EXP_FONT}`; ctx.textAlign = 'left';
-      const cred = [echoOn ? 'Meteocat' : '', reflOn ? 'AEMET' : '', (radfrOn || stormOn) ? 'OPERA · EUMETNET (CC BY 4.0)' : '', satOn ? '© EUMETSAT' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
+      const cred = [echoOn ? 'Meteocat' : '', reflOn ? 'AEMET' : '', (radfrOn || stormOn) ? 'OPERA · EUMETNET (CC BY 4.0)' : '', satOn ? '© EUMETSAT' : '', (window.riusExp && window.riusExp.actiu()) ? 'Rius © OpenStreetMap' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
       const txtCred = `Dades: ${cred}  |  Mapa base: ${base.length ? (currentBase === 'satelit' ? 'Esri' : currentBase === 'icgc' ? '© ICGC' : currentBase === 'topo' ? '© OpenTopoMap · OSM' : '© CARTO · © OpenStreetMap') : ''}`;
       ctx.fillText(txtCred, pad, fy + FH - 8 * u);
       if (totBase && fallBase > totBase * 0.2) { ctx.textAlign = 'right'; ctx.fillStyle = '#C8102E'; ctx.fillText('Atenció: part del mapa base no s\'ha pogut carregar', Wc - pad, fy + FH - 8 * u); }
@@ -1733,6 +1738,7 @@ async function nowcActiva(on){
           { nom: 'Radar AEMET', els: [lab('nowc-toggle'), idd('nowc-info'), lab('mov-toggle'), idd('mov-info')] },
           { nom: 'ACA', tot: ['aca-toggle', 'afo-toggle'], els: [lab('aca-toggle'), idd('aca-info'), lab('afo-toggle'), idd('afo-info')] },
           { nom: 'SAIH Ebre', tot: ['saih-plu-toggle', 'saih-afo-toggle'], els: [lab('saih-plu-toggle'), idd('saih-plu-info'), lab('saih-afo-toggle'), idd('saih-afo-info')] },
+          { nom: 'Hidrografia', els: [lab('rius-toggle'), idd('rius-info')] },
           { nom: 'Meteocat', els: [(lab('smp-toggle') || {}).parentElement] },
         ];
         const st = document.createElement('style');
@@ -1763,6 +1769,57 @@ async function nowcActiva(on){
           }
         });
       }catch(e){ console.warn('Panell agrupat per font', e); }
+    }
+  })();
+  // ---- Rius (data/rius/rius.geojson, generat per scripts/rius_build.py a partir d'OpenStreetMap): Catalunya i conques de l'Ebre ----
+  (function(){
+    const LS = 'nowcast_rius_v1', COL = '#2e86ff';
+    const pane = map.createPane('riusPane'); pane.style.zIndex = 420;          // sobre el radar, sota les estacions
+    const tog = document.getElementById('rius-toggle'), info = document.getElementById('rius-info');
+    const rend = L.canvas({ pane: 'riusPane', tolerance: 5 });
+    let capa = null, dades = null, carregant = false;
+    // gruix segons el zoom del visor: rius (c=1) sempre; rieres amb nom (c=2) a partir de zoom 10
+    const pes = c => { const z = map.getZoom(); return c === 1 ? (z < 8 ? 1 : z < 10 ? 1.6 : 2.4) : (z < 10 ? 0 : z < 12 ? 1 : 1.6); };
+    const estil = f => { const w = pes(f.properties.c); return w ? { stroke: true, color: COL, weight: w, opacity: 0.85, lineCap: 'round', lineJoin: 'round' } : { stroke: false }; };
+    function carrega(){
+      if (dades || carregant) return Promise.resolve();
+      carregant = true;
+      return fetch('data/rius/rius.geojson').then(r => r.ok ? r.json() : Promise.reject()).then(d => { dades = d; })
+        .catch(() => { if (info) info.textContent = 'Sense dades de rius (falta data/rius/rius.geojson)'; })
+        .then(() => { carregant = false; });
+    }
+    function activa(){
+      if (!tog) return;
+      try{ localStorage.setItem(LS, tog.checked ? '1' : '0'); }catch(_){}
+      if (!tog.checked){ if (capa) map.removeLayer(capa); if (info) info.textContent = ''; return; }
+      carrega().then(() => {
+        if (!dades || !tog.checked) return;
+        if (!capa) capa = L.geoJSON(dades, { pane: 'riusPane', renderer: rend, style: estil,
+          onEachFeature: (f, l) => { if (f.properties.n) l.bindTooltip(f.properties.n, { sticky: true, direction: 'top' }); } });
+        capa.addTo(map);
+        if (info) info.textContent = `${dades.features.length} rius i rieres · © OpenStreetMap`;
+      });
+    }
+    map.on('zoomend', () => { if (capa && map.hasLayer(capa)) capa.setStyle(estil); });
+    window.riusExp = {                                      // exportació d'imatge i GIF: es dibuixa igual que al mapa
+      actiu: () => !!(dades && capa && map.hasLayer(capa)),
+      dibuixa: (ctx, P, k) => {
+        ctx.save(); ctx.strokeStyle = COL; ctx.globalAlpha = 0.9; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        dades.features.forEach(f => {
+          const w = pes(f.properties.c); if (!w) return;
+          ctx.lineWidth = w * k;
+          f.geometry.coordinates.forEach(ls => {
+            ctx.beginPath();
+            ls.forEach((q, i) => { const p = P([q[1], q[0]]); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); });
+            ctx.stroke();
+          });
+        });
+        ctx.restore();
+      }
+    };
+    if (tog){
+      let on = false; try{ on = localStorage.getItem(LS) === '1'; }catch(_){}
+      tog.checked = on; tog.addEventListener('change', activa); if (on) activa();
     }
   })();
   // ---- Pluviòmetres ACA (data/aca/pluja_hist.json, generat per aca_pluja.py): segueixen la barra de temps ----
