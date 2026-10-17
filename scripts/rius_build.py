@@ -6,12 +6,14 @@ Es corre UNA vegada (o quan vulguis refrescar-lo): els rius no canvien. Baixa d'
   - a Catalunya, tots els waterway=stream (amb nom i sense).
 Es queda amb els rius i les rieres amb nom; els trams SENSE nom només s'hi afegeixen si són la continuació riu avall d'un
 tram amb nom (així una riera no es talla de cop quan OpenStreetMap té el tros final sense nom) fins que arriba a un altre
-tram, al mar o al límit de --max-continua-km. Després simplifica (Douglas-Peucker), arrodoneix i agrupa per nom.
+tram, al mar o al límit de --max-continua-km. Si una riera acaba a prop (<= --salta-m metres) d'un altre curs d'aigua però
+sense compartir-ne cap node (un forat de dades d'OpenStreetMap), s'hi afegeix un petit tram recte que la uneix al riu.
+Després simplifica (Douglas-Peucker), arrodoneix i agrupa per nom.
 
   python3 scripts/rius_build.py --brut ~/echotops-data/osm_rius2.json     # baixa (o reutilitza) i genera data/rius/rius.geojson
 Dades © OpenStreetMap contributors (ODbL): el visor ho cita al peu de les exportacions.
 Format antic de --brut (clau "elements", sense els trams sense nom): es pot llegir, però no es poden omplir els talls."""
-import argparse, json, sys, time, urllib.parse, urllib.request
+import argparse, json, math, sys, time, urllib.parse, urllib.request
 from collections import defaultdict
 from pathlib import Path
 
@@ -158,7 +160,43 @@ def selecciona(ways, min_km, max_cont_km, max_salts):
     return sel, len(base), n_cont
 
 
-def construeix(ways, tol, min_km, max_cont_km, max_salts):
+def repara_buits(ways, sel, max_m):
+    """Rieres seleccionades que acaben sense unir-se a res (l'últim node no el comparteix cap altre tram seleccionat) però que
+    tenen un altre curs d'aigua a menys de max_m metres: retorna petits trams rectes (nom, classe, [p_final, p_proper])."""
+    if max_m <= 0:
+        return []
+    nsel = defaultdict(int)
+    for i in sel:
+        for nd in set(ways[i]["nodes"]):
+            nsel[nd] += 1
+    CEL = 0.002                                                 # ~220 m
+    graella = defaultdict(list)
+    for i in sel:
+        for p in ways[i]["pts"]:
+            graella[(int(p[0] // CEL), int(p[1] // CEL))].append((p, i))
+    ponts = []
+    for i, nom in sel.items():
+        w = ways[i]
+        if not w["nodes"] or nsel[w["nodes"][-1]] > 1:
+            continue
+        e = w["pts"][-1]
+        cx, cy = int(e[0] // CEL), int(e[1] // CEL)
+        coslat = math.cos(math.radians(e[1]))
+        millor = None
+        for gx in (cx - 1, cx, cx + 1):
+            for gy in (cy - 1, cy, cy + 1):
+                for p, j in graella.get((gx, gy), ()):
+                    if j == i or (nom and sel[j] == nom):       # no s'enganxa a ell mateix ni a trams del mateix nom
+                        continue
+                    d = math.hypot((p[0] - e[0]) * coslat, p[1] - e[1]) * 111200.0
+                    if d <= max_m and (millor is None or d < millor[0]):
+                        millor = (d, p)
+        if millor and millor[0] > 0.5:
+            ponts.append((nom, w["c"], [list(e), list(millor[1])]))
+    return ponts
+
+
+def construeix(ways, tol, min_km, max_cont_km, max_salts, salta_m):
     sel, nbase, ncont = selecciona(ways, min_km, max_cont_km, max_salts)
     grups = {}
     for i, nom in sel.items():
@@ -166,9 +204,12 @@ def construeix(ways, tol, min_km, max_cont_km, max_salts):
         pts = [(round(x, 4), round(y, 4)) for x, y in dp(w["pts"], tol)]
         if len(pts) >= 2:
             grups.setdefault((nom, w["c"]), []).append([[x, y] for x, y in pts])
+    ponts = repara_buits(ways, sel, salta_m)
+    for nom, c, ls in ponts:
+        grups.setdefault((nom, c), []).append([[round(x, 4), round(y, 4)] for x, y in ls])
     feats = [{"type": "Feature", "properties": {"n": k[0], "c": k[1]},
               "geometry": {"type": "MultiLineString", "coordinates": ls}} for k, ls in sorted(grups.items())]
-    return {"type": "FeatureCollection", "features": feats}, nbase, ncont
+    return {"type": "FeatureCollection", "features": feats}, nbase, ncont, len(ponts)
 
 
 def main():
@@ -179,6 +220,7 @@ def main():
     ap.add_argument("--min-km", type=float, default=1.0, help="els rius sense nom més curts que això es descarten")
     ap.add_argument("--max-continua-km", type=float, default=8.0, help="màxim de recorregut sense nom que s'afegeix a la continuació d'una riera")
     ap.add_argument("--max-salts", type=int, default=12, help="màxim de trams sense nom encadenats per riera")
+    ap.add_argument("--salta-m", type=float, default=150.0, help="uneix amb un tram recte les rieres que acaben a menys d'aquests metres d'un altre curs (0 = no ho fa)")
     ap.add_argument("--max-mb", type=float, default=12.0)
     a = ap.parse_args()
     if a.brut and Path(a.brut).exists():
@@ -191,10 +233,10 @@ def main():
     print(f"{len(ways)} trams de cursos d'aigua")
     tol = a.tolerancia
     for _ in range(6):
-        gj, nbase, ncont = construeix(ways, tol, a.min_km, a.max_continua_km, a.max_salts)
+        gj, nbase, ncont, npont = construeix(ways, tol, a.min_km, a.max_continua_km, a.max_salts, a.salta_m)
         txt = json.dumps(gj, ensure_ascii=False, separators=(",", ":"))
         mb = len(txt.encode("utf-8")) / 1e6
-        print(f"tolerància {tol:g}: {len(gj['features'])} grups ({nbase} trams base + {ncont} de continuació), {mb:.2f} MB")
+        print(f"tolerància {tol:g}: {len(gj['features'])} grups ({nbase} trams base + {ncont} de continuació + {npont} unions de forats), {mb:.2f} MB")
         if mb <= a.max_mb:
             break
         tol *= 1.6
