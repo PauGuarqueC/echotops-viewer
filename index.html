@@ -2287,7 +2287,7 @@ async function nowcActiva(on){
     const pane = map.createPane('riusPane'); pane.style.zIndex = 420;          // sobre el radar, sota les estacions
     const tog = document.getElementById('rius-toggle'), info = document.getElementById('rius-info');
     const rend = L.canvas({ pane: 'riusPane', tolerance: 5 });
-    const Z_RIERES = 12;                                   // zoom a partir del qual surten les rieres i els seus noms (més alt = cal apropar-se més)
+    const Z_RIERES = 11.5;                                   // zoom a partir del qual surten les rieres i els seus noms (més alt = cal apropar-se més)
     let capaR = null, capaT = null, dades = null, carregant = false;
     // gruix segons el zoom del visor: rius (c=1) sempre; rieres amb nom (c=2) a partir de Z_RIERES
     const pes = c => { const z = map.getZoom(); return c === 1 ? (z < 8 ? 1 : z < 10 ? 1.6 : 2.4) : (z < Z_RIERES ? 0 : z < Z_RIERES + 2 ? 1 : 1.6); };
