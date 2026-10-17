@@ -2282,9 +2282,10 @@ async function nowcActiva(on){
     const pane = map.createPane('acaPane'); pane.style.zIndex = 460;
     const grup = L.layerGroup();
     const stp = document.createElement('style');
-    stp.textContent = '.aca-pill{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;padding:2px 9px;border-radius:12px;border:2px solid #fff;' +
-      'font:700 12px/1.25 var(--font-ui,sans-serif);box-shadow:0 1px 5px rgba(0,0,0,.55);cursor:pointer;letter-spacing:.01em;}' +
-      '.aca-pill small{font-weight:400;font-size:10px;opacity:.92;margin-left:2px;}';
+    stp.textContent = '.aca-pill{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;padding:1px 6px;border-radius:10px;border:1.5px solid #fff;' +
+      'font:700 10px/1.2 var(--font-ui,sans-serif);box-shadow:0 1px 4px rgba(0,0,0,.55);cursor:pointer;letter-spacing:.01em;}' +
+      '.aca-pill small{font-weight:400;font-size:8px;opacity:.92;margin-left:1px;}' +
+      '.aca-pill svg{width:7px;height:8px;margin-right:2px !important;}.aca-pill>span{font-size:8px !important;margin-right:2px !important;}';
     document.head.appendChild(stp);
     const tog = document.getElementById('aca-toggle'), info = document.getElementById('aca-info');
     const hl = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
