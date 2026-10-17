@@ -30,6 +30,7 @@ Z_LIM = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65]
 Z_COL = [(150, 215, 255), (70, 160, 255), (0, 190, 220), (0, 190, 80), (170, 215, 0), (255, 235, 0),
          (255, 150, 0), (240, 40, 20), (170, 0, 30), (210, 0, 170), (150, 60, 220)]
 Z_ALFA = [150, 190, 205, 215, 225, 230, 235, 240, 245, 250, 255]
+HATCH_RGB, HATCH_ALFA = (100, 100, 100), 90       # tramat gris = sense cobertura radar (alfa <= 100: el popup del visor el reconeix)
 
 def llista(prefix):
     """Claus del bucket amb aquest prefix (una sola pàgina: n'hi ha ~40 per hora)."""
@@ -63,7 +64,7 @@ def geometria():
     return lon, lat, [[s_, w_], [n_, e_]]
 
 def mostreja(h5path, lon, lat):
-    """Llegeix el compost ODIM i el mostreja a la reixa Mercator de sortida. Retorna dBZ (float32); -999 = sense dades."""
+    """Llegeix el compost ODIM i el mostreja a la reixa Mercator de sortida. Retorna dBZ (float32); -500 = cobertura sense eco; -999 = sense cobertura."""
     with h5py.File(h5path, "r") as h:
         ds = h["dataset1/data1/data"]
         wt = h["dataset1/data1/what"].attrs
@@ -84,27 +85,34 @@ def mostreja(h5path, lon, lat):
         r0, r1 = row[dins].min(), row[dins].max() + 1       # llegeixo només el tros necessari
         c0, c1 = col[dins].min(), col[dins].max() + 1
         tros = ds[r0:r1, c0:c1].astype(np.float64)
-    bad = (tros == nodata) | (tros == undet)
     z = tros * gain + off
-    z[bad] = -999
+    z[tros == undet] = -500          # cobertura però sense eco
+    z[tros == nodata] = -999         # sense cobertura radar
     out = np.full(lon.shape, -999, dtype=np.float32)
     out[dins] = z[row[dins] - r0, col[dins] - c0]
     return out
 
+def tramat(z):
+    """Línies diagonals sobre els píxels sense cobertura radar."""
+    yy, xx = np.indices(z.shape)
+    return (z < -900) & (((xx + yy) % 8) < 2)
+
 def img_pluja(z):
     mm = dbz_a_mmh(z)
     idx = np.digitize(mm, BREAKS)                    # 0 = sota 0,1 mm/h (transparent)
+    idx[tramat(z)] = len(BREAKS) + 1
     im = Image.fromarray(idx.astype(np.uint8), "P")
-    im.putpalette([0, 0, 0] + [v for c in RGB for v in c])
-    im.info["transparency"] = 0
+    im.putpalette([0, 0, 0] + [v for c in RGB for v in c] + list(HATCH_RGB))
+    im.info["transparency"] = bytes([0] + [255] * len(BREAKS) + [HATCH_ALFA])
     return im
 
 def img_refl(z):
     idx = np.digitize(z, Z_LIM)                      # 0 = sota 15 dBZ o sense dades (transparent)
     idx[z < -100] = 0
+    idx[tramat(z)] = len(Z_LIM) + 1
     im = Image.fromarray(idx.astype(np.uint8), "P")
-    im.putpalette([0, 0, 0] + [v for c in Z_COL for v in c])
-    im.info["transparency"] = bytes([0] + Z_ALFA)    # opacitat per classe
+    im.putpalette([0, 0, 0] + [v for c in Z_COL for v in c] + list(HATCH_RGB))
+    im.info["transparency"] = bytes([0] + Z_ALFA + [HATCH_ALFA])    # opacitat per classe
     return im
 
 def escriu_meta(nom_meta, prefix, unitat, font, limits, colors, bounds):
