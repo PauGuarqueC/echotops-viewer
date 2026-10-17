@@ -2291,7 +2291,10 @@ async function nowcActiva(on){
     let capaR = null, capaT = null, dades = null, carregant = false;
     // gruix segons el zoom del visor: rius (c=1) sempre; rieres amb nom (c=2) a partir de Z_RIERES
     const pes = c => { const z = map.getZoom(); return c === 1 ? (z < 8 ? 1 : z < 10 ? 1.6 : 2.4) : (z < Z_RIERES ? 0 : z < Z_RIERES + 2 ? 1 : 1.6); };
-    const estil = f => ({ stroke: true, color: COL, weight: pes(f.properties.c) || 1, opacity: 0.85, lineCap: 'round', lineJoin: 'round' });
+    const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+    const RIUS_FADE = { zPle: 11, zMin: 8, opMin: 0.3 };    // rius principals: opacitat 0.85 a zPle o més a prop, baixa fins a opMin a zMin o més lluny
+    const opac = c => c === 1 ? RIUS_FADE.opMin + (0.85 - RIUS_FADE.opMin) * clamp((map.getZoom() - RIUS_FADE.zMin) / (RIUS_FADE.zPle - RIUS_FADE.zMin), 0, 1) : 0.85;
+    const estil = f => ({ stroke: true, color: COL, weight: pes(f.properties.c) || 1, opacity: opac(f.properties.c), lineCap: 'round', lineJoin: 'round' });
     const nova = cls => L.geoJSON(dades, { pane: 'riusPane', renderer: rend, style: estil, filter: f => f.properties.c === cls,
       onEachFeature: (f, l) => { if (f.properties.n) l.bindTooltip(f.properties.n, { sticky: true, direction: 'top' }); } });
     function sync(){                                        // les rieres només hi són quan es veuen: sense línia tampoc hi ha nom
@@ -2325,7 +2328,7 @@ async function nowcActiva(on){
         ctx.save(); ctx.strokeStyle = COL; ctx.globalAlpha = 0.9; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         dades.features.forEach(f => {
           const w = pes(f.properties.c); if (!w) return;
-          ctx.lineWidth = w * k;
+          ctx.lineWidth = w * k; ctx.globalAlpha = opac(f.properties.c);
           f.geometry.coordinates.forEach(ls => {
             ctx.beginPath();
             ls.forEach((q, i) => { const p = P([q[1], q[0]]); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); });
