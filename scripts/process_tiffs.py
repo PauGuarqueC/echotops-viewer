@@ -6,6 +6,7 @@ Rutes sempre relatives a l'arrel del repositori (GitHub Actions o local).
 
 import json
 import re
+import time
 from pathlib import Path
 
 import numpy as np
@@ -136,6 +137,12 @@ def main():
         except Exception as e:
             errors.append(tiff_path.name)
             print(f"ERROR processant {tiff_path.name}: {e}")
+            try:      # un fitxer que falla i té més d'1 h es retira a _error/ (no es torna a provar a cada cicle)
+                if time.time() - tiff_path.stat().st_mtime > 3600:
+                    (RAW_DIR / "_error").mkdir(exist_ok=True)
+                    tiff_path.rename(RAW_DIR / "_error" / tiff_path.name)
+            except OSError:
+                pass
 
     print(f"Total processats: {processats}")
     if errors:
