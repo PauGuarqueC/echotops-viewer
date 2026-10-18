@@ -1,1 +1,1 @@
-{"final_utc":"2026-10-18T16:00:00Z","bounds":[[40.292,-0.3012],[43.109,3.80723]],"parametres":{"llindar_classe":6,"min_area_km2":83,"dist_costa_km":20},"cel_les":[]}
+{"final_utc":"2026-10-18T16:10:00Z","bounds":[[40.292,-0.3012],[43.109,3.80723]],"parametres":{"llindar_classe":6,"min_area_km2":83,"dist_costa_km":20},"cel_les":[{"enganxada_min":80,"classe_max":6,"mm_mitjana":7,"mm_max":10,"dist_costa_km":0,"mar":false,"nivell":1,"nom":"Vigil\u00e0ncia","lat":41.5559,"lon":1.3329,"area_km2":107,"mm_h_ara":8.0,"bbox":[[41.462,1.241],[41.642,1.3976]]}]}
