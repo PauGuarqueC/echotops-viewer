@@ -40,9 +40,12 @@
       .nowc-mv{ background:none; border:0; }
       .nowc-mv .nowc-svg{ position:absolute; left:0; top:0; pointer-events:none; filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.45)); }
       .nowc-mv .nowc-dot{ position:absolute; left:19px; top:19px; width:10px; height:10px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(11,19,32,.6), 0 1px 4px rgba(0,0,0,.5); box-sizing:border-box; }
-      .nowc-mv .nowc-pill{ position:absolute; left:32px; top:27px; white-space:nowrap; font:600 8px/1 var(--font-mono, monospace); color:#fff;
-        background:rgba(11,19,32,.82); border:1px solid rgba(255,255,255,.28); border-radius:6px; padding:2px 4px; box-shadow:0 1px 4px rgba(0,0,0,.4); pointer-events:none; }
+      .nowc-mv .nowc-pill{ position:absolute; left:33px; top:27px; white-space:nowrap; font:600 9.5px/1 var(--font-mono, monospace); color:#fff;
+        background:rgba(11,19,32,.82); border:1px solid rgba(255,255,255,.28); border-radius:7px; padding:2px 5px; box-shadow:0 1px 4px rgba(0,0,0,.4); pointer-events:none; }
       .nowc-zoom-baix .nowc-mv .nowc-pill{ display:none; }
+      .nowc-mv .nowc-pill{ opacity:.3; transition:opacity .15s; }
+      .nowc-mv:hover .nowc-pill{ opacity:1; }
+      @media (hover:none){ .nowc-mv .nowc-pill{ opacity:.85; } }
       .nowc-tk{ background:none; border:0; }
       .nowc-tk .nowc-tk-t{ position:absolute; transform:translate(-50%, 6px); font:600 9.5px/1 var(--font-mono, monospace); color:#fff; white-space:nowrap;
         text-shadow:0 0 3px #000, 0 0 3px #000, 0 0 5px #000; pointer-events:none; }
@@ -1480,13 +1483,13 @@ async function nowcActiva(on){
         ctx.beginPath(); ctx.arc(0, 0, 5, 0, 2 * Math.PI); ctx.fillStyle = '#fff'; ctx.fill();
         ctx.beginPath(); ctx.arc(0, 0, 3, 0, 2 * Math.PI); ctx.fillStyle = e.col; ctx.fill();
         if (e.pill && map.getZoom() >= 8){
-          ctx.font = `600 8px ${EXP_MONO}`;
-          const w = ctx.measureText(e.pill).width + 9, h = 14, x = 9, y = 4;
-          ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 7) : ctx.rect(x, y, w, h);
+          ctx.font = `600 9.5px ${EXP_MONO}`;
+          const w = ctx.measureText(e.pill).width + 11, h = 16, x = 9, y = 4;
+          ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 8) : ctx.rect(x, y, w, h);
           ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
           ctx.fillStyle = 'rgba(11,19,32,.82)'; ctx.fill(); ctx.shadowColor = 'transparent';
           ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1; ctx.stroke();
-          ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(e.pill, x + 4.5, y + h / 2 + 0.5);
+          ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(e.pill, x + 5.5, y + h / 2 + 0.5);
         }
       }
       ctx.restore();
