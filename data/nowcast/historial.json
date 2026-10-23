@@ -1,1 +1,1 @@
-{"final_utc":"2026-10-23T07:30:00Z","pas_min":10,"hores":48,"sense_dades":[],"fotogrames":{},"columnes":["nivell","lat","lon","area_km2","enganxada_min","classe_max","mm_mitjana","mm_max","mm_h_ara","s","w","n","e","dist_costa_km"]}
+{"final_utc":"2026-10-23T07:40:00Z","pas_min":10,"hores":48,"sense_dades":[],"fotogrames":{"202610230740":[[1,43.0543,1.3387,87,40,7,4,9,8.4,43.001,1.2048,43.1,1.4819,0]]},"columnes":["nivell","lat","lon","area_km2","enganxada_min","classe_max","mm_mitjana","mm_max","mm_h_ara","s","w","n","e","dist_costa_km"]}
