@@ -508,7 +508,7 @@ function initMap(){
   });
   map.addControl(new BasemapControl());
 
-  // ---- Tempestes enganxades (nowcasting, compost AEMET) ----
+  // ---- Tempestes enganxades (nowcasting, compost OPERA) ----
   // Dades de nowcast_export.py a data/nowcast/: avisos.json (últim fotograma), historial.json (48 h), refl/*.png.
   // La capa segueix l'instant de l'scrubber principal (currentTs, YYYYMMDD_HHMM UTC) via nowcMostra(ts).
   // Els avisos fixos amb so surten només per a les cel·les noves de l'últim fotograma (no en recórrer l'historial).
@@ -835,7 +835,7 @@ function initMap(){
       div.innerHTML = `<div class="nowc-cap"><span>Capes</span><span class="nowc-fl">▾</span></div><div class="nowc-body">
         <select id="capa-sel" style="display:none;">
           <option value="echo">Echotops (Meteocat)</option>
-          <option value="refl">Reflectivitat radar (AEMET)</option><option value="radoz">Reflectivitat OPERA (5 min)</option><option value="rador">Pluja estimada OPERA (5 min)</option>
+          <option value="refl">Reflectivitat OPERA 1 km</option><option value="radoz">Reflectivitat OPERA (5 min)</option><option value="rador">Pluja estimada OPERA (5 min)</option>
           <option value="sat">Satèl·lit IR 10,5 µm (MTG)</option>
           <option value="echo+sat">Echotops + satèl·lit</option>
           <option value="refl+sat">Reflectivitat + satèl·lit</option>
@@ -862,7 +862,7 @@ function initMap(){
         </div>
         <div class="nowc-sec" style="margin-top:10px;border-top:1px solid var(--panel-border);padding-top:8px;">Superposicions</div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:3px;">
-          <input type="checkbox" id="nowc-toggle" checked style="margin-top:2px"> <span><b>Tempestes enganxades</b> (radar AEMET)</span>
+          <input type="checkbox" id="nowc-toggle" checked style="margin-top:2px"> <span><b>Tempestes enganxades</b> (radar OPERA)</span>
         </label>
         <div id="nowc-info" style="margin-top:4px;font-size:11px;line-height:1.4;opacity:.9;"></div>
         <label style="display:flex;gap:6px;align-items:flex-start;cursor:pointer;margin-top:6px;">
@@ -944,7 +944,7 @@ function initMap(){
 
   // ---- Selector de fons: dos botons (Observació / Predicció) a dalt a l'esquerra. El <select id="capa-sel"> (ocult) continua sent la font de veritat ----
   (function(){
-    const OBS = [['echo', 'Echotops (Meteocat)'], ['refl', 'Reflectivitat radar (AEMET)'], ['radoz', 'Reflectivitat OPERA (5 min, Europa)'], ['rador', 'Pluja estimada OPERA (5 min, Europa)'], ['sat', 'Satèl·lit IR 10,5 µm (MTG)'], ['echo+sat', 'Echotops + satèl·lit'], ['refl+sat', 'Reflectivitat + satèl·lit']];
+    const OBS = [['echo', 'Echotops (Meteocat)'], ['radoz', 'Reflectivitat OPERA (5 min, Europa)'], ['rador', 'Pluja estimada OPERA (5 min, Europa)'], ['sat', 'Satèl·lit IR 10,5 µm (MTG)'], ['echo+sat', 'Echotops + satèl·lit'], ['refl+sat', 'Reflectivitat + satèl·lit']];
     const st = document.createElement('style');
     st.textContent = `
       #timeline-wrap{ padding:6px 12px 8px !important; }
@@ -1235,12 +1235,12 @@ function initMap(){
     const ini = fi - h.hores * 3600000;
     const hora = k => nowcHoraLocal(nowcMs(k));
     if (objectiu > fi + pas || objectiu < ini - pas){
-      info.innerHTML = 'Sense dades de radar AEMET per a aquest instant';
+      info.innerHTML = 'Sense dades de radar OPERA per a aquest instant';
       return;
     }
     const clau = nowcClau(Math.min(Math.round(objectiu / pas) * pas, fi));
     if (h.sense_dades.includes(clau)){
-      info.innerHTML = `Falta el fotograma AEMET de les ${hora(clau)}`;
+      info.innerHTML = `Falta el fotograma OPERA de les ${hora(clau)}`;
       return;
     }
     const esUltim = clau === nowcClau(fi);
@@ -1348,7 +1348,7 @@ function initMap(){
       t.textContent = 'Reflectivitat radar (dBZ)';
       b.innerHTML = '<div class="bands">' + REFL_LLEGENDA.map(([col, v]) => `<span style="background:${col}" title="≥ ${v} dBZ"></span>`).join('') + '</div>' +
         '<div class="band-labels">' + REFL_LLEGENDA.map(([col, v], i) => (i % 2 === 0) ? `<span style="left:${((i + 0.5) / REFL_LLEGENDA.length * 100).toFixed(2)}%">${v}${i === REFL_LLEGENDA.length - 1 ? '+' : ''}</span>` : '').join('') + '</div>';
-      c.textContent = 'Dades: AEMET';
+      c.textContent = 'Dades: OPERA · EUMETNET (CC BY 4.0)';
     }else if (m === 'sat'){
       t.textContent = 'Satèl·lit IR 10,5 µm';
       b.innerHTML = '<img alt="" style="display:block;max-width:100%;" src="' + LX_SAT_LEG() + '" onerror="this.outerHTML=\'<span style=&quot;font-size:10px&quot;>Llegenda no disponible</span>\'">';
