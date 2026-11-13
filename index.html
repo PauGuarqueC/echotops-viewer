@@ -3034,13 +3034,13 @@ async function nowcActiva(on){
       '.tl2-mode button.on{color:#fff;}.tl2-mode button[data-m="obs"].on{background:#52606d;}.tl2-mode button[data-m="prev"].on{background:#e08a00;}';
     document.head.appendChild(st);
     const wrap = document.createElement('div'); wrap.id = 'tl2-wrap'; wrap.style.display = 'none';
-    wrap.innerHTML = '<input type="range" id="tl2" min="-480" max="0" step="1" value="0"><div class="tl2-lbl"></div>';
+    wrap.innerHTML = '<input type="range" id="tl2" min="-576" max="0" step="1" value="0"><div class="tl2-lbl"></div>';
     old.parentNode.insertBefore(wrap, old.nextSibling);
     const tgl = document.createElement('span'); tgl.className = 'tl2-mode'; tgl.style.display = 'none';
     tgl.innerHTML = '<button type="button" data-m="obs">Observació</button><button type="button" data-m="prev">Previsió</button>';
     rd.insertBefore(tgl, pb);
     const sl = document.getElementById('tl2'), lbl = wrap.querySelector('.tl2-lbl');
-    const Q = 360000, N = 480;                              // passos de 6 min; 480 = 48 h
+    const Q = 300000, N = 576;                              // passos de 5 min (cadència d'OPERA); 576 = 48 h
     const LBL = { obs: [['−48 h', 0], ['−36 h', 25], ['−24 h', 50], ['−12 h', 75], ['Ara', 100]], prev: [['Ara', 0], ['+12 h', 25], ['+24 h', 50], ['+36 h', 75], ['+48 h', 100]] };
     let modeT = 'obs', Tsel = null, nowRef = Math.floor(Date.now() / Q) * Q, liveAnt = null, modAnt = null, obsOcult = false, ocults = [], pend = null, dragging = false, ownPlay = false, ownTimer = null, warned = false;
     const dFmt = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
