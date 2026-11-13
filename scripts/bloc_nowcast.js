@@ -325,7 +325,7 @@
       div.innerHTML = `<div class="nowc-cap"><span>Capes</span><span class="nowc-fl">▾</span></div><div class="nowc-body">
         <select id="capa-sel" style="display:none;">
           <option value="echo">Echotops (Meteocat)</option>
-          <option value="refl">Reflectivitat OPERA 1 km</option><option value="radoz">Reflectivitat OPERA (5 min)</option><option value="rador">Pluja estimada OPERA (5 min)</option>
+          <option value="radoz">Reflectivitat OPERA (5 min)</option><option value="rador">Pluja estimada OPERA (5 min)</option>
           <option value="sat">Satèl·lit IR 10,5 µm (MTG)</option>
           <option value="echo+sat">Echotops + satèl·lit</option>
           <option value="refl+sat">Reflectivitat + satèl·lit</option>
@@ -1612,7 +1612,7 @@ async function nowcActiva(on){
       let cx = pad; const util = Wc - 2 * pad - gap * Math.max(0, blocs.length - 1);
       blocs.forEach(b => { const w = Math.min(util * b.w / tot, 520 * u); b.f(cx, fy + 7 * u, w); cx += w + gap; });
       ctx.fillStyle = '#7b8794'; ctx.font = `400 ${9 * u}px ${EXP_FONT}`; ctx.textAlign = 'left';
-      const cred = [echoOn ? 'Meteocat' : '', reflOn ? 'AEMET' : '', (radfrOn || stormOn) ? 'OPERA · EUMETNET (CC BY 4.0)' : '', satOn ? '© EUMETSAT' : '', (window.riusExp && window.riusExp.actiu()) ? 'Rius © OpenStreetMap' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
+      const cred = [echoOn ? 'Meteocat' : '', (reflOn || radfrOn || stormOn) ? 'OPERA · EUMETNET (CC BY 4.0)' : '', satOn ? '© EUMETSAT' : '', (window.riusExp && window.riusExp.actiu()) ? 'Rius © OpenStreetMap' : '', modOn ? (MM.model === 'arome' ? 'AROME (Météo-France)' : 'WRF-SMC (SMC)') : ''].filter(Boolean).join(' · ');
       const txtCred = `Dades: ${cred}  |  Mapa base: ${base.length ? (currentBase === 'satelit' ? 'Esri' : currentBase === 'icgc' ? '© ICGC' : currentBase === 'topo' ? '© OpenTopoMap · OSM' : '© CARTO · © OpenStreetMap') : ''}`;
       ctx.fillText(txtCred, pad, fy + FH - 8 * u);
       if (totBase && fallBase > totBase * 0.2) { ctx.textAlign = 'right'; ctx.fillStyle = '#C8102E'; ctx.fillText('Atenció: part del mapa base no s\'ha pogut carregar', Wc - pad, fy + FH - 8 * u); }
@@ -1738,7 +1738,7 @@ async function nowcActiva(on){
         const lab = id => { const i = document.getElementById(id); return i ? i.closest('label') : null; };
         const idd = id => document.getElementById(id);
         const GRUPS = [
-          { nom: 'Radar AEMET', els: [lab('nowc-toggle'), idd('nowc-info'), lab('mov-toggle'), idd('mov-info')] },
+          { nom: 'Radar OPERA · tempestes', els: [lab('nowc-toggle'), idd('nowc-info'), lab('mov-toggle'), idd('mov-info')] },
           { nom: 'ACA', tot: ['aca-toggle', 'afo-toggle'], els: [lab('aca-toggle'), idd('aca-info'), lab('afo-toggle'), idd('afo-info')] },
           { nom: 'SAIH Ebre', tot: ['saih-plu-toggle', 'saih-afo-toggle'], els: [lab('saih-plu-toggle'), idd('saih-plu-info'), lab('saih-afo-toggle'), idd('saih-afo-info')] },
           { nom: 'Hidrografia', els: [lab('rius-toggle'), idd('rius-info')] },
