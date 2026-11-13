@@ -918,7 +918,7 @@ function initMap(){
           H.addEventListener('click', () => aplicaSup(!H.classList.contains('plegat')));
         }
       }catch(e){ console.warn('Superposicions plegable', e); }
-      try{ let m = localStorage.getItem(NOWC_LS_CAPA); if (m === 'refl+sat') m = 'radoz+sat'; if (m && CAPA_MODES[m]) refl.mode = m; else if (m && m.indexOf('mod:') === 0) mod.pendent = m; }catch(_){}
+      try{ let m = localStorage.getItem(NOWC_LS_CAPA); if (m === 'refl+sat') m = 'radoz+sat'; if (m === 'refl') m = 'radoz'; if (m && CAPA_MODES[m]) refl.mode = m; else if (m && m.indexOf('mod:') === 0) mod.pendent = m; }catch(_){}
       try{ const o = +(JSON.parse(localStorage.getItem(NOWC_LS_SAT) || '{}').op); if (o >= 20 && o <= 100) sat.op = o; }catch(_){}
       cs.value = refl.mode; so_.value = sat.op;
       const capaAplica = () => { [refl.actiu, sat.actiu] = capaM(refl.mode) || [false, false]; };
@@ -1453,7 +1453,7 @@ function initMap(){
     const ov = L.imageOverlay(radfrDir() + (refl.mode === 'radfh' ? best.f.replace('rf_', 'rh_') : best.f), M.bounds, { opacity: 0.75, interactive: false });
     ov.on('error', () => { if (radfr.ov === ov){ map.removeLayer(ov); radfr.ov = null; diu('Falta la imatge del radar ' + radfrQ() + ' de les ' + nowcHoraLocal(Date.parse(best.t))); } });
     radfr.ov = ov.addTo(map); ov.bringToBack();
-    radfr.px = null; radfr.pxM = refl.mode; radfr.pxB = M.bounds;
+    radfr.px = null; radfr.pxM = refl.mode.replace('+sat', ''); radfr.pxB = M.bounds;
     const imP = new Image(), urlP = ov._url;
     imP.onload = () => {
       if (!radfr.ov || radfr.ov._url !== urlP) return;
@@ -2089,7 +2089,7 @@ async function nowcActiva(on){
       if (echoOn) blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, 'ALÇADA ECHO TOP (KM)', EXP_ECHO_COLS, EXP_ECHO_LBL, 'frontera') });
       if (reflOn) blocs.push({ w: 3, f: (x, y, w) => expLlegBandes(ctx, u, x, y, w, 'REFLECTIVITAT RADAR (dBZ)', REFL_LLEGENDA.map(q => q[0]), REFL_LLEGENDA.map((q, i) => i % 2 === 0 ? q[1] + (i === REFL_LLEGENDA.length - 1 ? '+' : '') : ''), 'centre') });
       if (radfrOn){
-        const zm = refl.mode === 'radfz' || refl.mode === 'radoz', hm = refl.mode === 'radfh';
+        const zm = /^rad(?:fz|oz)(?:\+sat)?$/.test(refl.mode), hm = refl.mode === 'radfh';
         const cols = zm ? [MOD_ZERO].concat(REFL_LLEGENDA.map(q => q[0])) : hm ? radfhPal().col : [MOD_ZERO].concat(MOD_PAL_H.map(q => q[1]));
         const labs = zm ? REFL_LLEGENDA.map(q => q[1]) : hm ? radfhPal().lim : MOD_PAL_H.map(q => String(q[0]));
         const tit = zm ? 'RADAR OPERA · REFLECTIVITAT (dBZ)' : 'RADAR OPERA · PLUJA ESTIMADA (mm/h)';

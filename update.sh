@@ -18,7 +18,7 @@ rsync -a ~/echotops-data/png/ data/png/
 python3 scripts/opera_collector.py || echo "opera: error" >&2
 python3 scripts/opera_a_arxiu.py --hores 3 --pas 5 || echo "opera arxiu: error" >&2
 # retirat (ara la font del nowcast és OPERA): python3 scripts/aemet_compo.py --sortida "$HOME/echotops-data/aemet" || echo "nowcast: no s'ha pogut descarregar el compost" >&2
-python3 scripts/nowcast_export.py --arrel "$HOME/echotops-data/radar/arxiu_1km" --sortida data/nowcast || echo "nowcast: error a l'exportació" >&2
+python3 scripts/nowcast_export.py --arrel "$HOME/echotops-data/radar/arxiu_1km" --sortida data/nowcast --no-refl || echo "nowcast: error a l'exportació" >&2
 
 # --- Previsió: WRF-SMC i AROME (pluja de Météo-France) ---
 python3 scripts/arome_precip.py || echo "arome: error a la descàrrega" >&2
