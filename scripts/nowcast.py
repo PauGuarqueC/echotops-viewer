@@ -18,6 +18,7 @@ from scipy import ndimage
 import persist as P
 
 PAS = P.PAS_MIN
+NT = max(1, round(10 / PAS))      # fotogrames anteriors acceptats a la tolerància temporal (~10 min)
 ESTRUCT8 = np.ones((3, 3), bool)
 MAX_BUITS = 2     # fotogrames seguits que poden faltar sense trencar l'enganxament ni el càlcul de velocitat
 
@@ -44,7 +45,7 @@ def cel_les(m_ara, min_px):
 def detecta(cub, ok, k, llindar=6, min_px=3, solap=0.5, tol=1, max_min=240, M=None):
     """
     Avisos a l'instant k del cub (índex de fotograma). Requereix que el fotograma k existi.
-    tol: píxels de tolerància espacial (cel·les que "oscil·len") i temporal (±1 fotograma).
+    tol: píxels de tolerància espacial (cel·les que "oscil·len") i temporal (NT fotogrames, ~10 min).
     """
     if not ok[k]:
         return []
@@ -74,7 +75,10 @@ def detecta(cub, ok, k, llindar=6, min_px=3, solap=0.5, tol=1, max_min=240, M=No
                     break
                 continue
             buits = 0
-            prev = M[k - j][by0:by1, bx0:bx1] | (M[k - j - 1][by0:by1, bx0:bx1] if (k - j - 1 >= 0 and ok[k - j - 1]) else False)
+            prev = M[k - j][by0:by1, bx0:bx1].copy()
+            for q in range(1, NT + 1):             # tolerància temporal: ~10 min de fotogrames anteriors
+                if k - j - q >= 0 and ok[k - j - q]:
+                    prev |= M[k - j - q][by0:by1, bx0:bx1]
             if tol:
                 prev = ndimage.binary_dilation(prev, structure=ESTRUCT8, iterations=tol)
             if (cel_c & prev).sum() / area < solap:
