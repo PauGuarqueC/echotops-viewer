@@ -3040,7 +3040,7 @@ async function nowcActiva(on){
     tgl.innerHTML = '<button type="button" data-m="obs">Observació</button><button type="button" data-m="prev">Previsió</button>';
     rd.insertBefore(tgl, pb);
     const sl = document.getElementById('tl2'), lbl = wrap.querySelector('.tl2-lbl');
-    const Q = 300000, N = 576;                              // passos de 5 min (cadència d'OPERA); 576 = 48 h
+    const Q = 300000, N = 576, QP = 3600000, NP = 48, prevRef = () => Math.round(nowRef / 3600000) * 3600000;   // previsió: pas d'1 h                              // passos de 5 min (cadència d'OPERA); 576 = 48 h
     const LBL = { obs: [['−48 h', 0], ['−36 h', 25], ['−24 h', 50], ['−12 h', 75], ['Ara', 100]], prev: [['Ara', 0], ['+12 h', 25], ['+24 h', 50], ['+36 h', 75], ['+48 h', 100]] };
     let modeT = 'obs', Tsel = null, nowRef = Math.floor(Date.now() / Q) * Q, liveAnt = null, modAnt = null, obsOcult = false, ocults = [], pend = null, dragging = false, ownPlay = false, ownTimer = null, warned = false;
     const dFmt = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -3102,7 +3102,7 @@ async function nowcActiva(on){
     }
     function setMode(m){
       modeT = m; stopPlay(); Tsel = null; window.tlT = tlTval();
-      sl.min = m === 'prev' ? 0 : -N; sl.max = m === 'prev' ? N : 0; sl.value = 0;
+      sl.min = m === 'prev' ? 0 : -N; sl.max = m === 'prev' ? NP : 0; sl.value = 0;
       sl.classList.toggle('prev', m === 'prev');
       lbl.innerHTML = LBL[m].map(x => '<span style="left:' + x[1] + '%">' + x[0] + '</span>').join('');
       tgl.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.getAttribute('data-m') === m));
@@ -3132,8 +3132,8 @@ async function nowcActiva(on){
         const alFinal = Tsel === null;                       // observacio: ultim fotograma; previsio: Ara
         let T;
         if (modeT === 'prev'){
-          T = (Tsel !== null ? Tsel : nowRef) + 3600000;
-          Tsel = T > nowRef + N * Q ? null : T;
+          T = (Tsel !== null ? Tsel : prevRef()) + QP;
+          Tsel = T > prevRef() + NP * QP ? null : T;
         } else {
           const FRp = window.radfrFrames ? window.radfrFrames() : null;
           if (FRp && FRp.length){ if (alFinal) T = FRp[0]; else { const nx = FRp.find(x => x > Tsel + 1000); T = nx === undefined ? nowRef : nx; } }
@@ -3147,7 +3147,7 @@ async function nowcActiva(on){
     sl.addEventListener('input', () => {
       stopPlay();
       const v = +sl.value;
-      if (modeT === 'prev') Tsel = v <= 0 ? null : nowRef + v * Q;
+      if (modeT === 'prev') Tsel = v <= 0 ? null : prevRef() + v * QP;
       else Tsel = v >= 0 ? null : nowRef + v * Q;
       window.tlT = tlTval();
       if (!pend) pend = requestAnimationFrame(() => { pend = null; aplica(); });
@@ -3192,7 +3192,7 @@ async function nowcActiva(on){
           let Tc;
           if (modeT === 'prev') Tc = Tsel !== null ? Tsel : nowRef;
           else Tc = Tsel !== null ? Tsel : (window.radfrT != null ? window.radfrT : (currentTs ? tsToDate(currentTs).getTime() : nowRef));
-          const v = modeT === 'prev' ? Math.max(0, Math.min(N, Math.round((Tc - nowRef) / Q))) : Math.max(-N, Math.min(0, Math.round((Tc - nowRef) / Q)));
+          const v = modeT === 'prev' ? Math.max(0, Math.min(NP, Math.round((Tc - prevRef()) / QP))) : Math.max(-N, Math.min(0, Math.round((Tc - nowRef) / Q)));
           if (+sl.value !== v) sl.value = v;
         }
       }catch(e){ if (!warned){ warned = true; console.warn('Barra de temps unificada:', e); } }
