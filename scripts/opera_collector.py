@@ -16,7 +16,10 @@ from pyproj import CRS, Transformer
 ROOT = Path(__file__).resolve().parent.parent
 DEST = ROOT / "data" / "radar_opera"
 BRUT = Path.home() / "echotops-data" / "opera"      # .h5 originals (fora del repositori)
-S3 = "https://s3.waw3-1.cloudferro.com/openradar-24h"
+S3 = "https://s3.waw3-1.cloudferro.com/openradar-24h"                              # bucket principal
+S3_BACKUP = "https://object-store.os-api.cci1.ecmwf.int/openradar-24h-backup"      # còpia (incidència del proveïdor, nov. 2026)
+FONTS = [S3, S3_BACKUP]                                                            # ordre de preferència
+_ORIGEN = {}                                                                       # clau -> font d'on es baixarà
 NMAX = 72                     # fotogrames guardats (72 x 5 min = 6 h: el GIF d'Últimes 6 h necessita OPERA a tot el rang)
 W, E, S, N = -12.0, 8.0, 35.0, 47.0     # finestra (graus): ampla, per veure què s'apropa
 PX = 1200.0                   # mida de píxel en metres de Mercator
@@ -33,13 +36,33 @@ Z_ALFA = [150, 190, 205, 215, 225, 230, 235, 240, 245, 250, 255]
 HATCH_RGB, HATCH_ALFA = (100, 100, 100), 90       # tramat gris = sense cobertura radar (alfa <= 100: el popup del visor el reconeix)
 
 def llista(prefix):
-    """Claus del bucket amb aquest prefix (una sola pàgina: n'hi ha ~40 per hora)."""
-    url = S3 + "?list-type=2&prefix=" + urllib.parse.quote(prefix, safe="/@")
-    xml = urllib.request.urlopen(url, timeout=30).read().decode()
-    return re.findall(r"<Key>([^<]+)</Key>", xml)
+    """Claus amb aquest prefix a totes les fonts (una sola pàgina per font: n'hi ha ~40-70 per hora).
+    Si una font falla es continua amb l'altra; si una clau és a les dues, es baixa de la principal."""
+    claus = []
+    for base in FONTS:
+        try:
+            url = base + "?list-type=2&prefix=" + urllib.parse.quote(prefix, safe="/@")
+            xml = urllib.request.urlopen(url, timeout=30).read().decode()
+        except Exception as e:
+            print(f"AVÍS: la font {base.split('/')[2]} no respon ({e})", file=sys.stderr)
+            continue
+        for k in re.findall(r"<Key>([^<]+)</Key>", xml):
+            if k not in _ORIGEN:
+                _ORIGEN[k] = base
+            if k not in claus:
+                claus.append(k)
+    return claus
 
 def descarrega(clau, dest):
-    urllib.request.urlretrieve(S3 + "/" + urllib.parse.quote(clau, safe="/@"), dest)
+    primera = _ORIGEN.get(clau, FONTS[0])
+    ultim = None
+    for base in [primera] + [b for b in FONTS if b != primera]:
+        try:
+            urllib.request.urlretrieve(base + "/" + urllib.parse.quote(clau, safe="/@"), dest)
+            return
+        except Exception as e:
+            ultim = e
+    raise ultim
 
 def dbz_a_mmh(z):
     """dBZ -> mm/h (Marshall-Palmer). Valors no vàlids -> 0. Límit a 125 mm/h (evita ecos de calamarsa)."""
