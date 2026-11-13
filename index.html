@@ -3082,6 +3082,15 @@ async function nowcActiva(on){
       aplicaBase(force);
       if (fr){ if (currentTs === tsAnt && window.radfrT !== antT){ try{ reflMostra(); }catch(_){} } escriuHora(window.radfrT); }
     }
+    // OPERA (reflectivitat, tempestes) segueix el temps d'OPERA (5 min), no la graella d'echotops (6 min)
+    function opSegueix(){
+      try{
+        if (typeof mode === 'undefined' || mode !== 'live' || !nowc || !nowc.ultim) return;
+        const ts = opTs(currentTs);
+        if (ts && nowc.ts !== ts) nowcMostra(ts);
+        if (refl && refl.actiu && window.radfrT == null && ts){ const k = ts.replace('_', ''); escriuHora(nowcMs(k)); }
+      }catch(_){}
+    }
     function aplicaBase(force){
       const m = modSel();
       if (modeT === 'prev'){
@@ -3098,6 +3107,7 @@ async function nowcActiva(on){
           for (let i = 0; i < visibleTimestamps.length; i++){ const d = Math.abs(tsToDate(visibleTimestamps[i]).getTime() - Tsel); if (d < bd){ bd = d; best = i; } }
         }
         if (force || visibleTimestamps[best] !== currentTs) showFrame(best);
+        opSegueix();
       }
     }
     function setMode(m){
@@ -3233,12 +3243,22 @@ async function nowcActiva(on){
 
   let currentTs = null;
 
+  // Instant d'OPERA (graella de 5 min): el del fotograma de radar triat (modes de radar) o el de la barra de temps; si no n'hi ha (arxiu), el de l'echotop
+  function opTs(ts){
+    try{
+      if (typeof mode === 'undefined' || mode !== 'live' || !nowc || !nowc.ultim) return ts;
+      const fi = nowcMs(nowc.ultim.final_utc.replace(/[-:TZ]/g, '').slice(0, 12));
+      const T = window.radfrT != null ? window.radfrT : window.tlT;
+      const k = nowcClau(T == null ? fi : Math.min(Math.round(T / 300000) * 300000, fi));
+      return k.slice(0, 8) + '_' + k.slice(8);
+    }catch(_){ return ts; }
+  }
   function showFrame(index){
     if (!visibleTimestamps.length) return;
     index = Math.max(0, Math.min(index, visibleTimestamps.length - 1));
     const ts = visibleTimestamps[index];
     currentTs = ts;
-    if (typeof nowcMostra === 'function') nowcMostra(ts);
+    if (typeof nowcMostra === 'function') nowcMostra(opTs(ts));
     const { time: horaUtc } = fmtTs(ts);
     // hora de Catalunya (Europe/Madrid), amb horari d'estiu/hivern, sigui quin sigui el fus del navegador
     const pc = {}; new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
