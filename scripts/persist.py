@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-PAS_MIN = 10  # cadència del compost
+PAS_MIN = 5   # cadència de l'arxiu OPERA (nativa: 5 min)
 
 # Valor central (dBZ) de cada classe de l'escala AEMET (1 = 5-15 dBZ ... 12 = >65 dBZ)
 DBZ_CLASSE = {1: 10.0, 2: 17.5, 3: 22.5, 4: 27.5, 5: 32.5, 6: 37.5, 7: 42.5,

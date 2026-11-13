@@ -4,7 +4,7 @@
 Escriu a data/radar_opera/ (hora = fi de l'interval, UTC):
   rf_AAAAMMDD_HHMM.png + refl_meta.json   reflectivitat (dBZ), paleta d'AEMET/França (15-65 dBZ)
   ld_AAAAMMDD_HHMM.png + meta.json        pluja estimada (mm/h, Marshall-Palmer Z = 200 R^1.6), paleta de França
-Guarda també el fitxer brut (.h5, dBZ originals) a ~/echotops-data/opera/ (fora de git, últimes 3 h)
+Guarda també el fitxer brut (.h5, dBZ originals) a ~/echotops-data/radar/brut/ (fora de git, últimes 3 h)
 per al càlcul de seguiment de tempestes. No necessita cap clau (bucket S3 públic)."""
 import json, re, sys, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
@@ -15,7 +15,7 @@ from pyproj import CRS, Transformer
 
 ROOT = Path(__file__).resolve().parent.parent
 DEST = ROOT / "data" / "radar_opera"
-BRUT = Path.home() / "echotops-data" / "opera"      # .h5 originals (fora del repositori)
+BRUT = Path.home() / "echotops-data" / "radar" / "brut"      # .h5 originals (fora del repositori)
 S3 = "https://s3.waw3-1.cloudferro.com/openradar-24h"                              # bucket principal
 S3_BACKUP = "https://object-store.os-api.cci1.ecmwf.int/openradar-24h-backup"      # còpia (incidència del proveïdor, nov. 2026)
 FONTS = [S3, S3_BACKUP]                                                            # ordre de preferència

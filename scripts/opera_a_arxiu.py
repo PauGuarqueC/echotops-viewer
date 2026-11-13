@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """OPERA CIRRUS (1 km) -> arxiu de fotogrames de classes de reflectivitat, a la resolució NATIVA d'OPERA.
 
-Per a cada franja de --pas minuts (10 per defecte) agafa el fitxer brut d'OPERA (~/echotops-data/opera/ o, si no hi
+Per a cada franja de --pas minuts (5 per defecte) agafa el fitxer brut d'OPERA (~/echotops-data/radar/brut/ o, si no hi
 és, el baixa del bucket públic), el porta a una reixa lat/lon de ~1 km x 1 km sobre --domini (sense agregar: cada
 píxel és la mostra d'OPERA més propera), el converteix a classes 0-12 i el desa en el mateix format que feia servir
 el nowcast (persist.py / nowcast_export.py):
@@ -126,10 +126,10 @@ def converteix(h5, lonlat, bbox, max_nodata, fer_neteja):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sortida", default=str(Path.home() / "echotops-data" / "opera_1km"))
+    ap.add_argument("--sortida", default=str(Path.home() / "echotops-data" / "radar" / "arxiu_1km"))
     ap.add_argument("--brut", default=str(OC.BRUT))
     ap.add_argument("--hores", type=float, default=3, help="franja enrere a revisar (24 = omple tot el bucket)")
-    ap.add_argument("--pas", type=int, default=10, help="minuts entre fotogrames (10 evita els forats dels :x5)")
+    ap.add_argument("--pas", type=int, default=5, help="minuts entre fotogrames (10 evita els forats dels :x5)")
     ap.add_argument("--domini", type=float, nargs=4, default=DOMINI, metavar=("LON0", "LAT0", "LON1", "LAT1"),
                     help="àrea que es desa a l'arxiu")
     ap.add_argument("--bbox", type=float, nargs=4, default=BBOX_CAT, metavar=("LON0", "LAT0", "LON1", "LAT1"),

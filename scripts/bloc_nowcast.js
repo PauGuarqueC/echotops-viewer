@@ -168,7 +168,7 @@
           const q = obj(f), d = Math.hypot(cen(q)[0] - cy, cen(q)[1] - cx);
           if (d > 0.15) return;
           // la durada d'aturada no és estrictament monòtona (fusions, recàlculs): només desempata
-          const sc = d + Math.abs((q.enganxada_min - r.enganxada_min) * dir - 10 * k) * 0.001;
+          const sc = d + Math.abs((q.enganxada_min - r.enganxada_min) * dir - (h.pas_min || 10) * k) * 0.001;
           if (sc < bs){ bs = sc; best = q; }
         });
         if (best) return { r: best, ms: ms + dir * k * pas };
@@ -889,7 +889,7 @@
     if (!refl.actiu){ info.textContent = ''; return; }
     if (!u){ info.textContent = 'Sense dades de radar disponibles'; return; }
     const fi = nowcMs(u.final_utc.replace(/[-:TZ]/g, '').slice(0, 12));
-    const pas = 600000;
+    const pas = ((nowc.hist && nowc.hist.pas_min) || 10) * 60000;
     const hores = nowc.hist ? nowc.hist.hores : 48;
     const objectiu = nowc.ts ? nowcMs(nowc.ts.replace('_', '')) : fi;
     if (objectiu > fi + pas || objectiu < fi - hores * 3600000 - pas){

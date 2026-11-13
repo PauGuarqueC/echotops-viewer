@@ -186,15 +186,15 @@ def segueix(cub, ok, lb, ts, llindar, min_px, k_min_vel=0, finestra_min=60, min_
         cand = []
         for pid, p in pistes.items():
             gap = k - p["k"]
-            if gap > 3:
+            if gap > 30 // P.PAS_MIN:      # tolerància de pista perduda: 30 min
                 continue
             y0, x0 = p["pos"][-1][1:]
             if p["vel"] is not None:
                 y0 += p["vel"][0] * gap
                 x0 += p["vel"][1] * gap
-                rmax = 10 + 6 * gap
+                rmax = 10 + 0.6 * P.PAS_MIN * gap
             else:
-                rmax = 14 + 6 * gap
+                rmax = 14 + 0.6 * P.PAS_MIN * gap
             for j, (yk, xk, _, _, _) in enumerate(cents):
                 d = float(np.hypot(yk - y0, xk - x0))
                 if d <= rmax:
