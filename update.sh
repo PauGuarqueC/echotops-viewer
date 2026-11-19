@@ -70,7 +70,7 @@ if [ "$GIT_PUSH" = "1" ]; then
   if git diff --cached --quiet; then
     echo "Sense canvis, no cal commit."
   else
-    git commit -m "Actualitza echo tops $(date -u +%Y-%m-%dT%H:%MZ)"
+        git commit -m "Actualitza echo tops $(date -u +%Y-%m-%dT%H:%MZ)" -- data/
     git push
   fi
 fi
