@@ -1,5 +1,0 @@
-paramiko==3.4.0
-rasterio
-pillow
-matplotlib
-numpy
