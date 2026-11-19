@@ -18,8 +18,8 @@ SFTP_PORT = 22
 SFTP_USER = "bombers"
 SFTP_PASS = os.environ["SFTP_METEOCAT_PASS"]  # ve d'un GitHub Secret
 
-REPO_ROOT = Path(__file__).parent.parent
-RAW_DIR = Path.home() / "echotops-data" / "raw"
+import rutes
+RAW_DIR = rutes.ECHOTOPS / "raw"
 REMOTE_DIR = "/Dades/echotops"
 FILE_SUFFIX = "TOPS130_12.tif"
 

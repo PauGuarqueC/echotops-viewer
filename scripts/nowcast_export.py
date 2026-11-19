@@ -19,6 +19,7 @@ from PIL import Image
 from scipy import ndimage, signal
 
 import persist as P
+import rutes
 import nowcast as N
 
 # Retall per defecte: Catalunya + marge  (lon_min, lat_min, lon_max, lat_max)
@@ -260,8 +261,8 @@ def nivell(a):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arrel", default="/home/claude/javimiroo/radar-arxiu/data")
-    ap.add_argument("--sortida", default="/home/claude/persistencia/sortida_nowcast")
+    ap.add_argument("--arrel", default=str(rutes.RADAR / "arxiu_1km"))
+    ap.add_argument("--sortida", default=str(rutes.WEB / "nowcast"))
     ap.add_argument("--llindar", type=int, default=6, help="classe mínima (6 = >=35 dBZ)")
     ap.add_argument("--min-km2", type=float, default=83, help="àrea mínima d'una cel·la (km2; 83 = 12 píxels d'AEMET)")
     ap.add_argument("--min-px", type=int, default=None, help="àrea mínima en píxels (si no, es calcula de --min-km2)")
@@ -271,7 +272,7 @@ def main():
     ap.add_argument("--no-refl", action="store_true", help="no genera les imatges de reflectivitat")
     ap.add_argument("--dist-costa", type=float, default=20,
                     help="km: cel·les a més d'aquesta distància de la terra es marquen com a 'mar' i no fan avís")
-    ap.add_argument("--cache-costa", default=str(Path.home() / "echotops-data" / "dist_costa.npz"))
+    ap.add_argument("--cache-costa", default=str(rutes.ECHOTOPS / "dist_costa.npz"))
     ap.add_argument("--final", help="AAAAMMDDHHMM UTC (per defecte, l'últim fotograma)")
     a = ap.parse_args()
 

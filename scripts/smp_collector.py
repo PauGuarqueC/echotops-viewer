@@ -4,8 +4,8 @@ Una execució = DIES crides a l'API (v2 episodis-oberts?data=...). Ús: scripts/
 import json, os, sys, time, urllib.request, datetime as dt
 from zoneinfo import ZoneInfo
 DIES = 3                                                   # avui + 2 dies més
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(BASE, 'data/smp/avisos.json')
+import rutes
+OUT = str(rutes.WEB / 'smp' / 'avisos.json')
 STAMP = os.path.expanduser('~/.smp_ultima')
 cada = int(sys.argv[1]) if len(sys.argv) > 1 else 360
 if os.path.exists(STAMP) and time.time() - os.path.getmtime(STAMP) < cada * 60:

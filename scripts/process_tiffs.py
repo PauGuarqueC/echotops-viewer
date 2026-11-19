@@ -17,11 +17,10 @@ from rasterio.warp import calculate_default_transform, reproject, Resampling
 from matplotlib import cm
 from PIL import Image
 
-REPO_ROOT = Path(__file__).parent.parent
-DATA_ROOT = Path.home() / "echotops-data"
+import rutes
 
-RAW_DIR = DATA_ROOT / "raw"
-PNG_DIR = DATA_ROOT / "png"
+RAW_DIR = rutes.ECHOTOPS / "raw"
+PNG_DIR = rutes.PNG
 
 FILENAME_RE = re.compile(r"_TOP_(\d{8})_(\d{4})_TOPS130")
 

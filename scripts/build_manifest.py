@@ -8,8 +8,8 @@ import json
 import re
 from pathlib import Path
 
-DATA_ROOT = Path.home() / "echotops-data"
-PNG_DIR = DATA_ROOT / "png"
+import rutes
+PNG_DIR = rutes.PNG
 TS_RE = re.compile(r"^\d{8}_\d{4}$")
 
 

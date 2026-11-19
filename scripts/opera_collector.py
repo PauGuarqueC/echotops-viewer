@@ -13,9 +13,9 @@ import numpy as np, h5py
 from PIL import Image
 from pyproj import CRS, Transformer
 
-ROOT = Path(__file__).resolve().parent.parent
-DEST = ROOT / "data" / "radar_opera"
-BRUT = Path.home() / "echotops-data" / "radar" / "brut"      # .h5 originals (fora del repositori)
+import rutes
+DEST = rutes.WEB / "radar_opera"
+BRUT = rutes.RADAR / "brut"      # .h5 originals (no es serveixen)
 S3 = "https://s3.waw3-1.cloudferro.com/openradar-24h"                              # bucket principal
 S3_BACKUP = "https://object-store.os-api.cci1.ecmwf.int/openradar-24h-backup"      # còpia (incidència del proveïdor, nov. 2026)
 FONTS = [S3, S3_BACKUP]                                                            # ordre de preferència

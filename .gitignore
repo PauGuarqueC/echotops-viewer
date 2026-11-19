@@ -17,3 +17,5 @@ data/raw/
 update.log
 *.bak*
 *.congelat
+
+config.env

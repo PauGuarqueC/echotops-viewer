@@ -126,7 +126,7 @@ def converteix(h5, lonlat, bbox, max_nodata, fer_neteja):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sortida", default=str(Path.home() / "echotops-data" / "radar" / "arxiu_1km"))
+    ap.add_argument("--sortida", default=str(OC.rutes.RADAR / "arxiu_1km"))
     ap.add_argument("--brut", default=str(OC.BRUT))
     ap.add_argument("--hores", type=float, default=3, help="franja enrere a revisar (24 = omple tot el bucket)")
     ap.add_argument("--pas", type=int, default=5, help="minuts entre fotogrames (10 evita els forats dels :x5)")
