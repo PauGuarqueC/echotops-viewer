@@ -55,7 +55,7 @@ if [ -f "$HOME/.saih/env" ]; then
 fi
 
 # --- Avisos SMP ---
-python3 scripts/smp_collector.py 360 || echo "smp: error" >&2
+python3 scripts/smp_collector.py 1440 || echo "smp: error" >&2
 
 # --- Publicació a GitHub Pages (només fins que la plataforma d'IT funcioni) ---
 if [ "$GIT_PUSH" = "1" ]; then
